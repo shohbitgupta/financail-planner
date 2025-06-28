@@ -29,11 +29,18 @@ app.config['DEBUG'] = False
 
 # Try to import the existing API routes
 try:
+    # Check if we have all required dependencies for full API
+    import google.generativeai as genai
+
+    # Try to import the full API
     from flask_api.standalone_app import generate_financial_plan
     print("✅ Successfully imported financial plan API")
     HAS_FULL_API = True
 except ImportError as e:
-    print(f"⚠️ Failed to import full API: {e}")
+    print(f"⚠️ Failed to import full API (using fallback): {e}")
+    HAS_FULL_API = False
+except Exception as e:
+    print(f"⚠️ Error initializing full API (using fallback): {e}")
     HAS_FULL_API = False
 
 # Health check endpoint
