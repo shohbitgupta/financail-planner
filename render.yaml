@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: financial-planner-ai
+    env: python
+    buildCommand: |
+      pip install -r requirements.txt
+      cd react_financial_ui && npm install && npm run build && cd ..
+    startCommand: python simple_deploy.py
+    healthCheckPath: /api/health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PORT
+        value: 10000
+      - key: FLASK_ENV
+        value: production
+    disk:
+      name: financial-planner-data
+      mountPath: /opt/render/project/src
+      sizeGB: 1
