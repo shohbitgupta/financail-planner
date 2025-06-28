@@ -1,0 +1,14 @@
+Flask==2.3.3
+Flask-CORS==4.0.0
+langchain
+langchain-ollama
+langchain-chroma
+langchain-core
+pandas
+numpy
+scipy
+matplotlib
+requests
+google-generativeai
+chromadb
+python-dotenv
