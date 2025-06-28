@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { DollarSign, Target, Shield, Clock, AlertCircle, CheckCircle, User, Send, Calculator, ChevronDown, ChevronUp, Info, TrendingUp, TrendingDown, MessageCircle } from 'lucide-react';
 import ChatBasedInput from './ChatBasedInput';
+import { getApiUrl, API_CONFIG } from '../config';
 
 // Type definitions
 interface UserProfile {
@@ -356,7 +357,7 @@ const FinancialPlannerDashboard: React.FC = () => {
     try {
       console.log('Received data from chat:', chatUserData);
 
-      const response = await fetch('http://localhost:5001/api/generate-financial-plan', {
+      const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.GENERATE_PLAN), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -406,7 +407,7 @@ const FinancialPlannerDashboard: React.FC = () => {
 
     try {
       // Call Flask API with Ollama integration
-      const response = await fetch('http://localhost:5001/api/generate-financial-plan', {
+      const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.GENERATE_PLAN), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
