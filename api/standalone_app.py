@@ -5,6 +5,9 @@ from langchain_core.prompts import ChatPromptTemplate
 import re
 import sys
 import os
+import uuid
+import json
+from datetime import datetime
 
 # Add parent directory to path to import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -54,6 +57,339 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import vector database: {e}")
     VECTORS_AVAILABLE = False
+
+# RL Feedback System Implementation
+import sqlite3
+from pathlib import Path
+from dataclasses import dataclass, asdict
+from typing import Dict, List, Optional, Any
+import numpy as np
+
+@dataclass
+class FeedbackData:
+    """User feedback data structure"""
+    feedback_id: str
+    user_id: str
+    session_id: str
+    rating: int  # 1-5 scale
+    feedback_text: str
+    feedback_categories: List[str]
+    query: str
+    response: str
+    user_profile: Dict[str, Any]
+    timestamp: str
+    response_strategy: Optional[Dict[str, Any]] = None
+
+class RLFeedbackEngine:
+    """Simple RL feedback engine for collecting and processing user feedback"""
+
+    def __init__(self, db_path: str = "api/rl_feedback.db"):
+        self.db_path = db_path
+        self.initialize_database()
+
+    def initialize_database(self):
+        """Initialize SQLite database for feedback storage"""
+        try:
+            # Ensure directory exists
+            Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            # Create feedback table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS feedback (
+                    feedback_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    session_id TEXT NOT NULL,
+                    rating INTEGER NOT NULL,
+                    feedback_text TEXT,
+                    feedback_categories TEXT,
+                    query TEXT NOT NULL,
+                    response TEXT NOT NULL,
+                    user_profile TEXT NOT NULL,
+                    response_strategy TEXT,
+                    timestamp TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            conn.commit()
+            conn.close()
+
+        except Exception as e:
+            print(f"Failed to initialize RL database: {e}")
+
+    def store_feedback(self, feedback: FeedbackData) -> bool:
+        """Store user feedback in database"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                INSERT OR REPLACE INTO feedback (
+                    feedback_id, user_id, session_id, rating, feedback_text,
+                    feedback_categories, query, response, user_profile,
+                    response_strategy, timestamp
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                feedback.feedback_id,
+                feedback.user_id,
+                feedback.session_id,
+                feedback.rating,
+                feedback.feedback_text,
+                json.dumps(feedback.feedback_categories),
+                feedback.query,
+                feedback.response,
+                json.dumps(feedback.user_profile),
+                json.dumps(feedback.response_strategy) if feedback.response_strategy else None,
+                feedback.timestamp
+            ))
+
+            conn.commit()
+            conn.close()
+            return True
+
+        except Exception as e:
+            print(f"Failed to store feedback: {e}")
+            return False
+
+    def get_learning_insights(self) -> Dict[str, Any]:
+        """Get learning insights and system performance metrics"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            # System performance metrics
+            cursor.execute('SELECT COUNT(*), AVG(rating) FROM feedback')
+            result = cursor.fetchone()
+            total_interactions = result[0] if result[0] else 0
+            avg_rating = result[1] if result[1] else 0
+
+            # Satisfaction rate (ratings >= 4)
+            cursor.execute('SELECT COUNT(*) FROM feedback WHERE rating >= 4')
+            satisfied_result = cursor.fetchone()
+            satisfied_users = satisfied_result[0] if satisfied_result else 0
+            satisfaction_rate = satisfied_users / total_interactions if total_interactions > 0 else 0
+
+            conn.close()
+
+            return {
+                'system_performance': {
+                    'total_interactions': total_interactions,
+                    'average_rating': round(avg_rating, 2),
+                    'user_satisfaction_rate': round(satisfaction_rate, 2),
+                    'improvement_trend': 'stable'
+                },
+                'learning_effectiveness': {
+                    'patterns_identified': total_interactions,
+                    'successful_adaptations': satisfied_users,
+                    'areas_for_improvement': ['Continue collecting feedback']
+                }
+            }
+
+        except Exception as e:
+            print(f"Failed to get learning insights: {e}")
+            return {
+                'system_performance': {
+                    'total_interactions': 0,
+                    'average_rating': 0,
+                    'user_satisfaction_rate': 0,
+                    'improvement_trend': 'unknown'
+                },
+                'learning_effectiveness': {
+                    'patterns_identified': 0,
+                    'successful_adaptations': 0,
+                    'areas_for_improvement': []
+                }
+            }
+
+    def get_adaptive_response_strategy(self, user_profile: Dict[str, Any], user_id: str = None) -> Dict[str, Any]:
+        """Generate adaptive response strategy based on historical feedback"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            # Get feedback patterns for similar user profiles
+            cursor.execute('''
+                SELECT rating, feedback_text, feedback_categories, user_profile, query, response
+                FROM feedback
+                WHERE rating >= 4
+                ORDER BY created_at DESC
+                LIMIT 20
+            ''')
+
+            positive_feedback = cursor.fetchall()
+
+            # Get negative feedback patterns
+            cursor.execute('''
+                SELECT rating, feedback_text, feedback_categories, user_profile, query, response
+                FROM feedback
+                WHERE rating <= 2
+                ORDER BY created_at DESC
+                LIMIT 10
+            ''')
+
+            negative_feedback = cursor.fetchall()
+
+            conn.close()
+
+            # Analyze patterns and generate strategy
+            strategy = {
+                'strategy_type': 'adaptive',
+                'confidence': 0.7,
+                'total_feedback_samples': len(positive_feedback) + len(negative_feedback),
+                'positive_patterns': [],
+                'areas_to_avoid': [],
+                'recommended_focus': [],
+                'prompt_adjustments': {}
+            }
+
+            # Extract positive patterns
+            if positive_feedback:
+                positive_categories = []
+                for feedback in positive_feedback:
+                    try:
+                        categories = json.loads(feedback[2]) if feedback[2] else []
+                        positive_categories.extend(categories)
+                    except:
+                        pass
+
+                # Count most appreciated aspects
+                from collections import Counter
+                category_counts = Counter(positive_categories)
+                strategy['positive_patterns'] = [
+                    {'aspect': cat, 'frequency': count}
+                    for cat, count in category_counts.most_common(5)
+                ]
+
+                # Generate recommendations based on positive feedback
+                if 'accuracy' in [cat for cat, _ in category_counts.most_common(3)]:
+                    strategy['recommended_focus'].append('Provide more specific numerical calculations')
+                if 'relevance' in [cat for cat, _ in category_counts.most_common(3)]:
+                    strategy['recommended_focus'].append('Focus on user-specific goals and constraints')
+                if 'clarity' in [cat for cat, _ in category_counts.most_common(3)]:
+                    strategy['recommended_focus'].append('Use clear, structured explanations')
+
+            # Extract negative patterns to avoid
+            if negative_feedback:
+                negative_categories = []
+                for feedback in negative_feedback:
+                    try:
+                        categories = json.loads(feedback[2]) if feedback[2] else []
+                        negative_categories.extend(categories)
+                    except:
+                        pass
+
+                from collections import Counter
+                negative_counts = Counter(negative_categories)
+                strategy['areas_to_avoid'] = [
+                    {'issue': cat, 'frequency': count}
+                    for cat, count in negative_counts.most_common(3)
+                ]
+
+            # Generate prompt adjustments based on patterns
+            if strategy['positive_patterns']:
+                top_positive = strategy['positive_patterns'][0]['aspect']
+                if top_positive == 'accuracy':
+                    strategy['prompt_adjustments']['emphasis'] = 'numerical_precision'
+                elif top_positive == 'relevance':
+                    strategy['prompt_adjustments']['emphasis'] = 'personalization'
+                elif top_positive == 'clarity':
+                    strategy['prompt_adjustments']['emphasis'] = 'structured_explanation'
+
+            return strategy
+
+        except Exception as e:
+            print(f"Failed to generate adaptive strategy: {e}")
+            return {
+                'strategy_type': 'default',
+                'confidence': 0.5,
+                'total_feedback_samples': 0,
+                'positive_patterns': [],
+                'areas_to_avoid': [],
+                'recommended_focus': [],
+                'prompt_adjustments': {}
+            }
+
+# Initialize RL feedback system
+try:
+    rl_engine = RLFeedbackEngine()
+    RL_FEEDBACK_AVAILABLE = True
+    print("✅ RL feedback system available")
+except Exception as e:
+    print(f"⚠️ RL feedback system not available: {e}")
+    RL_FEEDBACK_AVAILABLE = False
+    rl_engine = None
+
+def collect_user_feedback(feedback_data: Dict[str, Any]) -> bool:
+    """Collect user feedback for reinforcement learning"""
+    if not RL_FEEDBACK_AVAILABLE or not rl_engine:
+        return False
+
+    try:
+        feedback = FeedbackData(
+            feedback_id=feedback_data['feedback_id'],
+            user_id=feedback_data['user_id'],
+            session_id=feedback_data['session_id'],
+            rating=feedback_data['rating'],
+            feedback_text=feedback_data.get('feedback_text', ''),
+            feedback_categories=feedback_data.get('feedback_categories', []),
+            query=feedback_data['query'],
+            response=feedback_data['response'],
+            user_profile=feedback_data['user_profile'],
+            timestamp=feedback_data.get('timestamp', datetime.now().isoformat()),
+            response_strategy=feedback_data.get('response_strategy')
+        )
+
+        return rl_engine.store_feedback(feedback)
+
+    except Exception as e:
+        print(f"Failed to collect feedback: {e}")
+        return False
+
+def get_adaptive_response_strategy(user_profile: Dict[str, Any], user_id: str = None) -> Dict[str, Any]:
+    """Get adaptive response strategy based on historical feedback"""
+    if not RL_FEEDBACK_AVAILABLE or not rl_engine:
+        return {
+            'strategy_type': 'default',
+            'confidence': 0.5,
+            'recommended_focus': [],
+            'prompt_adjustments': {}
+        }
+
+    return rl_engine.get_adaptive_response_strategy(user_profile, user_id)
+
+def create_adaptive_prompt(base_prompt: str, strategy: Dict[str, Any], user_data: Dict[str, Any]) -> str:
+    """Create an adaptive prompt based on feedback strategy"""
+
+    # Start with base prompt
+    adaptive_prompt = base_prompt
+
+    # Add adaptive instructions based on strategy
+    if strategy.get('recommended_focus'):
+        focus_instructions = "\n\nBased on user feedback patterns, please pay special attention to:\n"
+        for focus in strategy['recommended_focus']:
+            focus_instructions += f"- {focus}\n"
+        adaptive_prompt += focus_instructions
+
+    # Add emphasis based on prompt adjustments
+    emphasis = strategy.get('prompt_adjustments', {}).get('emphasis')
+    if emphasis == 'numerical_precision':
+        adaptive_prompt += "\n\nIMPORTANT: Provide precise numerical calculations and specific dollar amounts. Users value accuracy in financial projections."
+    elif emphasis == 'personalization':
+        adaptive_prompt += f"\n\nIMPORTANT: Tailor recommendations specifically to this user's profile: {user_data.get('age', 'N/A')} years old, {user_data.get('risk_tolerance', 'moderate')} risk tolerance, goals: {', '.join(user_data.get('goals', []))}."
+    elif emphasis == 'structured_explanation':
+        adaptive_prompt += "\n\nIMPORTANT: Use clear, well-structured explanations with bullet points and organized sections. Users prefer clarity and easy-to-follow recommendations."
+
+    # Add areas to avoid based on negative feedback
+    if strategy.get('areas_to_avoid'):
+        avoid_instructions = "\n\nBased on user feedback, please avoid:\n"
+        for area in strategy['areas_to_avoid']:
+            avoid_instructions += f"- Issues related to {area['issue']} (mentioned {area['frequency']} times in negative feedback)\n"
+        adaptive_prompt += avoid_instructions
+
+    return adaptive_prompt
 
 def get_wio_platform_recommendation(category, market):
     """Get WIO Bank platform recommendation based on investment category and market."""
@@ -629,10 +965,34 @@ def generate_financial_plan():
 
         llm_response = "LLM not available - using rule-based financial planning"
 
+        # Generate session and user IDs for tracking
+        session_id = str(uuid.uuid4())
+        user_id = user_data.get('user_id', f"user_{uuid.uuid4().hex[:8]}")
+
+        # Get adaptive response strategy from RL feedback system
+        response_strategy = {'strategy_type': 'default', 'confidence': 0.5}
+        if RL_FEEDBACK_AVAILABLE:
+            try:
+                response_strategy = get_adaptive_response_strategy(user_data, user_id)
+                print(f"🧠 Adaptive strategy: {response_strategy['strategy_type']} (confidence: {response_strategy['confidence']})")
+                if response_strategy['recommended_focus']:
+                    print(f"📋 Focus areas: {response_strategy['recommended_focus']}")
+            except Exception as e:
+                print(f"Error getting adaptive strategy: {e}")
+
         if OLLAMA_AVAILABLE and model:
             try:
-                # Generate AI response using Ollama with vector context
-                chain = prompt | model
+                # Create adaptive prompt based on feedback patterns
+                adaptive_template = template
+                if RL_FEEDBACK_AVAILABLE and response_strategy['strategy_type'] == 'adaptive':
+                    adaptive_template = create_adaptive_prompt(template, response_strategy, user_data)
+                    print("🎯 Using adaptive prompt based on user feedback patterns")
+
+                # Create adaptive prompt
+                adaptive_prompt = ChatPromptTemplate.from_template(adaptive_template)
+
+                # Generate AI response using Ollama with adaptive context
+                chain = adaptive_prompt | model
                 llm_response = chain.invoke({
                     'instruments': instruments_context,
                     'age': user_data['age'],
@@ -710,7 +1070,16 @@ def generate_financial_plan():
 
         # Add evaluation metadata to the response
         structured_plan['evaluation_metadata'] = evaluation_metadata
-        
+
+        # Add response strategy metadata for feedback collection
+        structured_plan['response_metadata'] = {
+            'session_id': session_id,
+            'user_id': user_id,
+            'response_strategy': response_strategy,
+            'adaptive_prompt_used': RL_FEEDBACK_AVAILABLE and response_strategy['strategy_type'] == 'adaptive',
+            'feedback_samples_used': response_strategy.get('total_feedback_samples', 0)
+        }
+
         return jsonify(structured_plan)
         
     except Exception as e:
@@ -781,6 +1150,65 @@ def get_instruments_by_category(category):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/feedback', methods=['POST'])
+def submit_feedback():
+    """Submit user feedback for reinforcement learning"""
+    try:
+        feedback_data = request.json
+
+        # Validate required fields
+        required_fields = ['rating', 'query', 'response', 'user_profile']
+        for field in required_fields:
+            if field not in feedback_data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+
+        # Generate feedback ID if not provided
+        if 'feedback_id' not in feedback_data:
+            feedback_data['feedback_id'] = str(uuid.uuid4())
+
+        # Generate user ID if not provided
+        if 'user_id' not in feedback_data:
+            feedback_data['user_id'] = f"user_{uuid.uuid4().hex[:8]}"
+
+        # Generate session ID if not provided
+        if 'session_id' not in feedback_data:
+            feedback_data['session_id'] = str(uuid.uuid4())
+
+        # Add timestamp if not provided
+        if 'timestamp' not in feedback_data:
+            feedback_data['timestamp'] = datetime.now().isoformat()
+
+        if RL_FEEDBACK_AVAILABLE:
+            success = collect_user_feedback(feedback_data)
+            if success:
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Feedback collected successfully',
+                    'feedback_id': feedback_data['feedback_id']
+                })
+            else:
+                return jsonify({'error': 'Failed to store feedback'}), 500
+        else:
+            return jsonify({'error': 'RL feedback system not available'}), 503
+
+    except Exception as e:
+        print(f"Error submitting feedback: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/learning-insights', methods=['GET'])
+def get_learning_insights():
+    """Get insights from the reinforcement learning system"""
+    try:
+        if RL_FEEDBACK_AVAILABLE:
+            insights = rl_engine.get_learning_insights()
+            return jsonify(insights)
+        else:
+            return jsonify({'error': 'RL feedback system not available'}), 503
+
+    except Exception as e:
+        print(f"Error getting learning insights: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -788,6 +1216,7 @@ def health_check():
         'status': 'healthy',
         'ollama_available': OLLAMA_AVAILABLE,
         'database_available': DATABASE_AVAILABLE,
+        'rl_feedback_available': RL_FEEDBACK_AVAILABLE,
         'model': 'llama3.2' if OLLAMA_AVAILABLE else 'fallback'
     })
 

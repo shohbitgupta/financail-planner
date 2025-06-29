@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { DollarSign, Target, Shield, Clock, AlertCircle, CheckCircle, User, Send, Calculator, ChevronDown, ChevronUp, Info, TrendingUp, TrendingDown, MessageCircle } from 'lucide-react';
 import ChatBasedInput from './ChatBasedInput';
+import FeedbackSystem from './FeedbackSystem';
 import { getApiUrl, API_CONFIG } from '../config';
 
 // Type definitions
@@ -90,6 +91,16 @@ interface EvaluationMetadata {
   };
 }
 
+interface ResponseMetadata {
+  llm_source: string;
+  session_id: string;
+  user_id: string;
+  response_strategy: any;
+  llamacloud_used: boolean;
+  vector_context_available: boolean;
+  timestamp: string;
+}
+
 interface FinancialPlan {
   user_profile: UserProfile;
   recommendations: Recommendation[];
@@ -102,6 +113,7 @@ interface FinancialPlan {
   additional_advice: string[];
   compliance_notes: string;
   evaluation_metadata?: EvaluationMetadata;
+  response_metadata?: ResponseMetadata;
   raw_llm_response?: string;
 }
 
@@ -1634,6 +1646,22 @@ const FinancialPlannerDashboard: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Feedback System for Reinforcement Learning */}
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <FeedbackSystem
+            query={JSON.stringify(plan.user_profile)}
+            response={JSON.stringify(plan)}
+            userProfile={plan.user_profile}
+            sessionId={plan.response_metadata?.session_id}
+            userId={plan.response_metadata?.user_id}
+            onFeedbackSubmitted={(success) => {
+              if (success) {
+                console.log('Feedback submitted successfully');
+              }
+            }}
+          />
         </div>
       </div>
     </div>

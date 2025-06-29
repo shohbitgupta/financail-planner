@@ -5,6 +5,10 @@ from langchain_core.prompts import ChatPromptTemplate
 import re
 import sys
 import os
+import json
+import traceback
+from datetime import datetime
+import uuid
 
 # Add parent directory to path to import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -54,6 +58,25 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import vector database: {e}")
     VECTORS_AVAILABLE = False
+
+# Import LlamaCloud RAG service
+try:
+    from llamacloud_rag_service import llamacloud_rag_service, initialize_llamacloud_service
+    LLAMACLOUD_AVAILABLE = True
+    print("✅ LlamaCloud RAG service available")
+except ImportError as e:
+    print(f"⚠️ LlamaCloud RAG service not available: {e}")
+    LLAMACLOUD_AVAILABLE = False
+    llamacloud_rag_service = None
+
+# Import RL feedback system
+try:
+    from rl_feedback_system import collect_user_feedback, get_adaptive_response_strategy, rl_engine
+    RL_FEEDBACK_AVAILABLE = True
+    print("✅ RL feedback system available")
+except ImportError as e:
+    print(f"⚠️ RL feedback system not available: {e}")
+    RL_FEEDBACK_AVAILABLE = False
 
 def get_wio_platform_recommendation(category, market):
     """Get WIO Bank platform recommendation based on investment category and market."""
@@ -587,24 +610,40 @@ def parse_llm_response_to_structured_data(llm_response, user_data, financial_met
 
 @app.route('/api/generate-financial-plan', methods=['POST'])
 def generate_financial_plan():
-    """Generate financial plan using Ollama LLM or fallback logic"""
+    """Generate financial plan using LlamaCloud RAG, Ollama LLM, or fallback logic with RL feedback"""
     try:
         user_data = request.json
-        
+
         # Validate required fields
         required_fields = ['age', 'retirement_age', 'annual_salary', 'annual_expenses', 'current_savings']
         for field in required_fields:
             if field not in user_data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
-        
+
         print(f"Received user data: {user_data}")
-        
+
+        # Generate session ID for tracking
+        session_id = str(uuid.uuid4())
+        user_id = user_data.get('user_id', f"user_{uuid.uuid4().hex[:8]}")
+
+        # Get adaptive response strategy from RL feedback system
+        response_strategy = {'strategy': 'default', 'confidence': 0.5}
+        if RL_FEEDBACK_AVAILABLE:
+            try:
+                response_strategy = get_adaptive_response_strategy(user_data, user_id)
+                print(f"Adaptive strategy: {response_strategy}")
+            except Exception as e:
+                print(f"Error getting adaptive strategy: {e}")
+
         # Calculate basic financial metrics
         financial_metrics = calculate_basic_financial_metrics(user_data)
 
-        # Get relevant instruments from vector database
+        # Get relevant instruments from LlamaCloud RAG or local vector database
         instruments_context = "UAE and US market instruments available for diversified portfolio allocation"
-        if VECTORS_AVAILABLE and retriver:
+        financial_context = None
+
+        # Try LlamaCloud RAG first (cloud-deployable)
+        if LLAMACLOUD_AVAILABLE and llamacloud_rag_service and llamacloud_rag_service.initialized:
             try:
                 # Create a comprehensive query based on user profile
                 goals_text = ', '.join(user_data.get('goals', ['retirement planning']))
@@ -613,26 +652,75 @@ def generate_financial_plan():
                 sharia_text = "Sharia-compliant" if user_data.get('is_sharia_compliant', False) else ""
 
                 query = f"Investment recommendations for {goals_text} with {risk_text} risk tolerance in {market_text} market {sharia_text}"
-                print(f"Vector DB Query: {query}")
+                print(f"LlamaCloud RAG Query: {query}")
+
+                # Retrieve financial context using LlamaCloud
+                financial_context = llamacloud_rag_service.retrieve_financial_context(query, user_data)
+
+                if financial_context and financial_context.instruments:
+                    instruments_context = f"Available instruments: {len(financial_context.instruments)} relevant options found"
+                    for instrument in financial_context.instruments[:5]:  # Top 5
+                        instruments_context += f"\n- {instrument['symbol']} ({instrument['category']}): {instrument['market']}"
+                    print(f"LlamaCloud retrieved {len(financial_context.instruments)} relevant instruments")
+                else:
+                    print("LlamaCloud returned no results, falling back to local vector DB")
+
+            except Exception as e:
+                print(f"LlamaCloud RAG error: {e}")
+                financial_context = None
+
+        # Fallback to local vector database if LlamaCloud not available
+        if not financial_context and VECTORS_AVAILABLE and retriver:
+            try:
+                # Create a comprehensive query based on user profile
+                goals_text = ', '.join(user_data.get('goals', ['retirement planning']))
+                risk_text = user_data.get('risk_tolerance', 'moderate')
+                market_text = user_data.get('preferred_market', 'UAE')
+                sharia_text = "Sharia-compliant" if user_data.get('is_sharia_compliant', False) else ""
+
+                query = f"Investment recommendations for {goals_text} with {risk_text} risk tolerance in {market_text} market {sharia_text}"
+                print(f"Local Vector DB Query: {query}")
 
                 instruments_results = retriver.invoke(query)
                 if instruments_results:
                     instruments_context = "\n".join([doc.page_content for doc in instruments_results[:10]])
-                    print(f"Retrieved {len(instruments_results)} relevant instrument data points")
+                    print(f"Retrieved {len(instruments_results)} relevant instrument data points from local DB")
                 else:
                     print("No vector results found, using default context")
             except Exception as e:
                 print(f"Vector retrieval error: {e}")
                 instruments_context = "UAE and US market instruments available for diversified portfolio allocation"
-        else:
-            print("Vector database not available, using default context")
+        elif not financial_context:
+            print("Neither LlamaCloud nor local vector database available, using default context")
 
         llm_response = "LLM not available - using rule-based financial planning"
+        llm_source = "fallback"
 
-        if OLLAMA_AVAILABLE and model:
+        # Try LlamaCloud RAG first (cloud-deployable)
+        if LLAMACLOUD_AVAILABLE and llamacloud_rag_service and llamacloud_rag_service.initialized and financial_context:
             try:
+                print("Generating response using LlamaCloud RAG...")
+                llm_response = llamacloud_rag_service.generate_financial_plan(user_data, financial_context)
+                llm_source = "llamacloud"
+                print(f"LlamaCloud Response: {llm_response}")
+
+            except Exception as e:
+                print(f"Error with LlamaCloud: {e}")
+                llm_response = "LlamaCloud error - falling back to local LLM"
+                llm_source = "llamacloud_error"
+
+        # Fallback to local Ollama if LlamaCloud not available or failed
+        if llm_source in ["fallback", "llamacloud_error"] and OLLAMA_AVAILABLE and model:
+            try:
+                print("Generating response using local Ollama...")
+                # Apply adaptive strategy from RL feedback
+                enhanced_prompt = prompt
+                if response_strategy.get('detail_level') == 'comprehensive':
+                    # Add more detailed instructions for comprehensive responses
+                    enhanced_prompt = prompt  # Could be enhanced based on strategy
+
                 # Generate AI response using Ollama with vector context
-                chain = prompt | model
+                chain = enhanced_prompt | model
                 llm_response = chain.invoke({
                     'instruments': instruments_context,
                     'age': user_data['age'],
@@ -648,8 +736,13 @@ def generate_financial_plan():
                     'monthly_savings_capacity': financial_metrics['monthly_savings_capacity'],
                     'savings_rate': financial_metrics['savings_rate']
                 })
-                
-                print(f"LLM Response: {llm_response}")
+                llm_source = "ollama"
+                print(f"Ollama Response: {llm_response}")
+
+            except Exception as e:
+                print(f"Error calling Ollama: {e}")
+                llm_response = f"LLM Error: {str(e)} - using fallback recommendations"
+                llm_source = "ollama_error"
 
                 # Evaluate and improve response using Gemini 2.5 Pro
                 if EVALUATOR_AVAILABLE:
@@ -710,7 +803,18 @@ def generate_financial_plan():
 
         # Add evaluation metadata to the response
         structured_plan['evaluation_metadata'] = evaluation_metadata
-        
+
+        # Add enhanced metadata for tracking and feedback
+        structured_plan['response_metadata'] = {
+            'llm_source': llm_source,
+            'session_id': session_id,
+            'user_id': user_id,
+            'response_strategy': response_strategy,
+            'llamacloud_used': llm_source == "llamacloud",
+            'vector_context_available': bool(financial_context or (VECTORS_AVAILABLE and retriver)),
+            'timestamp': datetime.now().isoformat()
+        }
+
         return jsonify(structured_plan)
         
     except Exception as e:
@@ -781,21 +885,163 @@ def get_instruments_by_category(category):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/feedback', methods=['POST'])
+def submit_feedback():
+    """Submit user feedback for reinforcement learning"""
+    try:
+        feedback_data = request.json
+
+        # Validate required fields
+        required_fields = ['rating', 'query', 'response', 'user_profile']
+        for field in required_fields:
+            if field not in feedback_data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+
+        # Generate feedback ID if not provided
+        if 'feedback_id' not in feedback_data:
+            feedback_data['feedback_id'] = str(uuid.uuid4())
+
+        # Generate user ID if not provided
+        if 'user_id' not in feedback_data:
+            feedback_data['user_id'] = f"user_{uuid.uuid4().hex[:8]}"
+
+        # Generate session ID if not provided
+        if 'session_id' not in feedback_data:
+            feedback_data['session_id'] = str(uuid.uuid4())
+
+        if RL_FEEDBACK_AVAILABLE:
+            success = collect_user_feedback(feedback_data)
+            if success:
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Feedback collected successfully',
+                    'feedback_id': feedback_data['feedback_id']
+                })
+            else:
+                return jsonify({'error': 'Failed to store feedback'}), 500
+        else:
+            return jsonify({'error': 'RL feedback system not available'}), 503
+
+    except Exception as e:
+        print(f"Error submitting feedback: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/learning-insights', methods=['GET'])
+def get_learning_insights():
+    """Get insights from the reinforcement learning system"""
+    try:
+        if RL_FEEDBACK_AVAILABLE:
+            insights = rl_engine.get_learning_insights()
+            return jsonify(insights)
+        else:
+            return jsonify({'error': 'RL feedback system not available'}), 503
+
+    except Exception as e:
+        print(f"Error getting learning insights: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/llamacloud/status', methods=['GET'])
+def llamacloud_status():
+    """Check LlamaCloud service status"""
+    try:
+        if LLAMACLOUD_AVAILABLE and llamacloud_rag_service:
+            health = llamacloud_rag_service.health_check()
+            return jsonify(health)
+        else:
+            return jsonify({
+                'service': 'LlamaCloud RAG',
+                'initialized': False,
+                'available': False,
+                'message': 'LlamaCloud service not available'
+            })
+
+    except Exception as e:
+        print(f"Error checking LlamaCloud status: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
+    """Enhanced health check endpoint"""
     return jsonify({
         'status': 'healthy',
-        'ollama_available': OLLAMA_AVAILABLE,
-        'database_available': DATABASE_AVAILABLE,
-        'model': 'llama3.2' if OLLAMA_AVAILABLE else 'fallback'
+        'services': {
+            'ollama_available': OLLAMA_AVAILABLE,
+            'database_available': DATABASE_AVAILABLE,
+            'vectors_available': VECTORS_AVAILABLE,
+            'llamacloud_available': LLAMACLOUD_AVAILABLE and llamacloud_rag_service and llamacloud_rag_service.initialized if LLAMACLOUD_AVAILABLE else False,
+            'rl_feedback_available': RL_FEEDBACK_AVAILABLE,
+            'evaluator_available': EVALUATOR_AVAILABLE
+        },
+        'models': {
+            'primary_llm': 'LlamaCloud' if LLAMACLOUD_AVAILABLE and llamacloud_rag_service and llamacloud_rag_service.initialized else ('llama3.2' if OLLAMA_AVAILABLE else 'fallback'),
+            'evaluator': 'Gemini 2.5 Pro' if EVALUATOR_AVAILABLE else 'not available'
+        },
+        'features': {
+            'cloud_deployment_ready': LLAMACLOUD_AVAILABLE,
+            'adaptive_responses': RL_FEEDBACK_AVAILABLE,
+            'response_evaluation': EVALUATOR_AVAILABLE,
+            'vector_context': VECTORS_AVAILABLE or (LLAMACLOUD_AVAILABLE and llamacloud_rag_service and llamacloud_rag_service.initialized)
+        }
     })
 
 if __name__ == '__main__':
-    print("Starting Flask API server...")
-    print(f"Ollama available: {OLLAMA_AVAILABLE}")
-    if OLLAMA_AVAILABLE:
-        print("Using Ollama model: llama3.2")
+    print("Starting Enhanced Financial Planner AI Agent...")
+    print("=" * 60)
+
+    # Initialize LlamaCloud if API key is available
+    llamacloud_api_key = os.getenv('LLAMA_CLOUD_API_KEY')
+    if LLAMACLOUD_AVAILABLE and llamacloud_api_key:
+        print("🔄 Initializing LlamaCloud RAG service...")
+        if initialize_llamacloud_service(llamacloud_api_key):
+            print("✅ LlamaCloud RAG service initialized successfully")
+
+            # Setup financial knowledge base
+            try:
+                # Load financial data for LlamaCloud
+                if DATABASE_AVAILABLE:
+                    db = InvestmentDatabase()
+                    instruments = db.get_all_instruments()
+                    performance = db.get_performance_metrics()
+                    db.close()
+
+                    financial_data = {
+                        'instruments': instruments.to_dict('records'),
+                        'performance_metrics': performance.to_dict('records')
+                    }
+
+                    if llamacloud_rag_service.setup_financial_knowledge_base(financial_data):
+                        print("✅ Financial knowledge base setup complete")
+                    else:
+                        print("⚠️ Failed to setup financial knowledge base")
+                else:
+                    print("⚠️ Database not available for knowledge base setup")
+
+            except Exception as e:
+                print(f"⚠️ Error setting up knowledge base: {e}")
+        else:
+            print("❌ Failed to initialize LlamaCloud RAG service")
+    elif LLAMACLOUD_AVAILABLE:
+        print("⚠️ LlamaCloud available but no API key found (set LLAMA_CLOUD_API_KEY)")
     else:
-        print("Using fallback rule-based recommendations")
+        print("⚠️ LlamaCloud not available")
+
+    # Service status summary
+    print("\n📊 Service Status:")
+    print(f"   • Ollama LLM: {'✅ Available' if OLLAMA_AVAILABLE else '❌ Not available'}")
+    print(f"   • LlamaCloud RAG: {'✅ Available' if LLAMACLOUD_AVAILABLE and llamacloud_rag_service and llamacloud_rag_service.initialized else '❌ Not available'}")
+    print(f"   • Vector Database: {'✅ Available' if VECTORS_AVAILABLE else '❌ Not available'}")
+    print(f"   • RL Feedback System: {'✅ Available' if RL_FEEDBACK_AVAILABLE else '❌ Not available'}")
+    print(f"   • Evaluator Agent: {'✅ Available' if EVALUATOR_AVAILABLE else '❌ Not available'}")
+    print(f"   • Investment Database: {'✅ Available' if DATABASE_AVAILABLE else '❌ Not available'}")
+
+    # Primary LLM selection
+    if LLAMACLOUD_AVAILABLE and llamacloud_rag_service and llamacloud_rag_service.initialized:
+        print("\n🚀 Primary LLM: LlamaCloud RAG (Cloud-deployable)")
+    elif OLLAMA_AVAILABLE:
+        print("\n🚀 Primary LLM: Ollama llama3.2 (Local)")
+    else:
+        print("\n🚀 Primary LLM: Rule-based fallback")
+
+    print("=" * 60)
+    print("🌐 Starting Flask API server on http://0.0.0.0:5001")
     app.run(debug=True, host='0.0.0.0', port=5001)
