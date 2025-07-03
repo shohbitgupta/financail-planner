@@ -1559,23 +1559,6 @@ const FinancialPlannerDashboard: React.FC = () => {
 
                   {plan.raw_llm_response ? (
                     <div className="space-y-6">
-                      {/* Parse and display LLM response sections */}
-                      {(() => {
-                        const sections = parseLLMResponseSections(plan.raw_llm_response);
-                        return Object.entries(sections).map(([sectionName, content]) => (
-                          <div key={sectionName} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-                            <h4 className="font-semibold text-gray-900 mb-3 text-lg border-b border-gray-200 pb-2">
-                              {sectionName.replace(/_/g, ' ')}
-                            </h4>
-                            <div className="prose prose-sm max-w-none">
-                              <div className="text-gray-700 whitespace-pre-line leading-relaxed">
-                                {content}
-                              </div>
-                            </div>
-                          </div>
-                        ));
-                      })()}
-
                       {/* Evaluation Metadata (if available) */}
                       {plan.evaluation_metadata && (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
@@ -1606,8 +1589,6 @@ const FinancialPlannerDashboard: React.FC = () => {
                           </div>
                         </div>
                       )}
-
-
                     </div>
                   ) : (
                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">

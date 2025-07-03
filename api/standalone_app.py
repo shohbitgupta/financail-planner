@@ -395,7 +395,7 @@ def get_wio_platform_recommendation(category, market):
     """Get WIO Bank platform recommendation based on investment category and market."""
 
     # WIO Invest App for Stocks
-    if category.lower() in ['equity', 'stock', 'etf'] or 'stock' in category.lower():
+    if category.lower() in ['bond', 'equity', 'stock', 'etf'] or 'stock' in category.lower():
         return {
             'platform_name': 'WIO Bank',
             'platform_type': 'Digital Investment Platform',
@@ -425,7 +425,7 @@ def get_wio_platform_recommendation(category, market):
         }
 
     # WIO Personal Saving Spaces for Fixed Income
-    elif category.lower() in ['bond', 'fixed income', 'savings'] or any(term in category.lower() for term in ['bond', 'fixed', 'saving']):
+    elif category.lower() in ['fixed income', 'savings'] or any(term in category.lower() for term in ['bond', 'fixed', 'saving']):
         return {
             'platform_name': 'WIO Bank',
             'platform_type': 'Digital Savings Platform',
@@ -459,7 +459,7 @@ def get_wio_platform_recommendation(category, market):
         return {
             'platform_name': 'WIO Bank',
             'platform_type': 'Comprehensive Digital Banking',
-            'app_name': 'WIO Banking App',
+            'app_name': 'WIO Personal App',
             'features': [
                 'All-in-one financial platform',
                 'Investment and savings integration',
@@ -497,16 +497,16 @@ except Exception as e:
     OLLAMA_AVAILABLE = False
     model = None
 
-# Enhanced template for structured financial planning with vector context
+# Enhanced dynamic template for structured financial planning with historical data context
 template = """
-You are an advanced AI financial planner with access to comprehensive market data and historical analysis.
+You are an advanced AI financial planner with access to real-time market data, historical performance analysis, and comprehensive investment research.
 
-RELEVANT MARKET CONTEXT:
+HISTORICAL MARKET CONTEXT & AVAILABLE INSTRUMENTS:
 {instruments}
 
 USER PROFILE:
-- Age: {age}
-- Retirement Age: {retirement_age}
+- Age: {age} years
+- Retirement Age: {retirement_age} years
 - Annual Income: ${annual_income:,.0f}
 - Annual Expenses: ${annual_expenses:,.0f}
 - Current Savings: ${current_savings:,.0f}
@@ -520,29 +520,101 @@ FINANCIAL ANALYSIS:
 - Monthly Savings Capacity: ${monthly_savings_capacity:,.0f}
 - Annual Savings Rate: {savings_rate:.1%}
 
-Please provide a structured response with the following sections:
+INSTRUCTIONS:
+Based on the user's profile and historical market data provided above, create a DYNAMIC and PERSONALIZED financial plan.
 
-1. EXECUTIVE SUMMARY (2-3 sentences about the overall financial situation)
-2. PORTFOLIO RECOMMENDATIONS (List 3-5 specific investments with allocation percentages)
-3. RISK ASSESSMENT (Brief analysis of portfolio risk level based on user profile)
-4. TIME HORIZON ANALYSIS (How the investment timeline affects strategy)
-5. MONTHLY SAVINGS NEEDED (Specific amount to reach retirement goals)
-6. GOAL ACHIEVEMENT TIMELINE (When each goal can be achieved)
-7. ADDITIONAL ADVICE (3-4 actionable recommendations)
-8. COMPLIANCE NOTES (If Sharia compliance is required, mention suitable instruments)
+DO NOT use generic allocations. Instead:
+1. Analyze the user's specific risk tolerance, age, and investment horizon
+2. Consider historical performance data of available instruments
+3. Calculate optimal allocation percentages based on Modern Portfolio Theory
+4. Recommend specific instruments with actual symbols and names from the context
+5. Provide realistic expected returns based on historical data
+6. Consider market conditions and economic factors
 
-Keep responses professional, specific with numbers, and actionable. Focus on UAE and US market opportunities.
+REQUIRED RESPONSE STRUCTURE:
+
+1. EXECUTIVE SUMMARY
+Brief analysis of the user's financial position and recommended strategy approach.
+
+2. PORTFOLIO RECOMMENDATIONS
+List 3-5 SPECIFIC instruments with:
+- Exact instrument name and symbol from the context
+- Precise allocation percentage (must total 100%)
+- Investment amount in dollars
+- Rationale based on historical performance and user profile
+- Expected annual return based on historical data
+
+3. RISK ASSESSMENT
+Analyze portfolio risk level considering:
+- User's risk tolerance and age
+- Portfolio volatility based on historical data
+- Risk-adjusted returns (Sharpe ratios)
+
+4. TIME HORIZON ANALYSIS
+How the {investment_horizon}-year timeline affects:
+- Asset allocation strategy
+- Risk capacity changes over time
+- Rebalancing recommendations
+
+5. MONTHLY SAVINGS NEEDED
+Calculate specific monthly investment amounts to achieve:
+- Retirement income replacement of 80% current income
+- Emergency fund targets
+- Goal-specific savings rates
+
+6. GOAL ACHIEVEMENT TIMELINE
+Realistic timeline for achieving:
+- Retirement readiness
+- Each specific goal mentioned
+- Milestone checkpoints
+
+7. ADDITIONAL ADVICE
+Actionable recommendations for:
+- Portfolio rebalancing frequency
+- Tax optimization strategies
+- Risk management approaches
+
+8. COMPLIANCE NOTES
+If Sharia compliance required, specify which recommended instruments are compliant.
+
+CRITICAL: Base ALL recommendations on the actual historical data and instruments provided in the context. Use real performance metrics, not generic assumptions.
 """
 
 prompt = ChatPromptTemplate.from_template(template)
 
 def clean_nan_values(value):
-    """Convert NaN values to None for JSON serialization"""
+    """Convert NaN values and numpy types to JSON-serializable values"""
     import math
-    if value is None or (isinstance(value, float) and math.isnan(value)):
+    import numpy as np
+
+    if value is None:
+        return None
+    elif isinstance(value, (np.integer, np.int64, np.int32)):
+        return int(value)
+    elif isinstance(value, (np.floating, np.float64, np.float32)):
+        if math.isnan(value):
+            return None
+        return float(value)
+    elif isinstance(value, float) and math.isnan(value):
         return None
     return value
 
+def calculate_projected_wealth(monthly_investment, annual_return, years):
+    """Calculate projected wealth using compound interest formula"""
+    if annual_return <= 0 or years <= 0 or monthly_investment <= 0:
+        return monthly_investment * 12 * years
+
+    monthly_rate = annual_return / 12
+    total_months = years * 12
+
+    # Future value of annuity formula: PMT * [((1 + r)^n - 1) / r]
+    if monthly_rate > 0:
+        future_value = monthly_investment * (((1 + monthly_rate) ** total_months - 1) / monthly_rate)
+    else:
+        future_value = monthly_investment * total_months
+
+    return future_value
+# TODO("DO not use investment DB instead use ollama3.2 / vector DB/ Gemini2.5 pro generated recommendations")
 def get_specific_instrument_recommendations(user_data):
     """Get specific instrument recommendations from the database"""
     if not DATABASE_AVAILABLE:
@@ -735,6 +807,137 @@ def calculate_basic_financial_metrics(user_data):
         'is_on_track': shortfall <= 0
     }
 
+def generate_dynamic_recommendations(user_data, financial_metrics):
+    """Generate dynamic recommendations based on user profile and historical data"""
+    print(f"🔍 DEBUG - generate_dynamic_recommendations called")
+    print(f"🔍 DEBUG - DATABASE_AVAILABLE: {DATABASE_AVAILABLE}")
+
+    if not DATABASE_AVAILABLE:
+        print(f"🔍 DEBUG - Database not available, returning empty list")
+        return []
+
+    try:
+        db = InvestmentDatabase()
+        print(f"🔍 DEBUG - Database connection established")
+
+        # Get all available instruments
+        if user_data.get('is_sharia_compliant', False):
+            instruments_df = db.get_sharia_compliant_instruments()
+            print(f"🔍 DEBUG - Getting Sharia compliant instruments")
+        else:
+            instruments_df = db.get_all_instruments()
+            print(f"🔍 DEBUG - Getting all instruments")
+
+        print(f"🔍 DEBUG - Found {(instruments_df)} instruments")
+
+        # Filter by market preference
+        if user_data.get('preferred_market') and user_data['preferred_market'] != 'BOTH':
+            fl_instruments_df = instruments_df[instruments_df['market'] == user_data['preferred_market']]
+            print(f"🔍 DEBUG - Filtered by market {user_data['preferred_market']}: {len(fl_instruments_df)} instruments")
+
+        # Get performance metrics
+        performance_df = db.get_performance_metrics()
+        print(f"🔍 DEBUG - Found {len(performance_df)} performance records")
+        merged_df = instruments_df.merge(performance_df, on='symbol', how='left')
+        print(f"🔍 DEBUG - Merged data: {len(merged_df)} records")
+
+        # Dynamic risk-based allocation strategy
+        risk_tolerance = user_data.get('risk_tolerance', 'moderate').lower()
+        age = user_data.get('age', 35)
+        investment_horizon = user_data.get('retirement_age', 65) - age
+
+        # Calculate dynamic allocation based on multiple factors
+        if risk_tolerance == 'conservative' or age > 55 or investment_horizon < 10:
+            equity_allocation = max(20, 100 - age)  # Age-based rule
+            bond_allocation = min(70, age + 10)
+            reit_allocation = 10
+        elif risk_tolerance == 'aggressive' and age < 40 and investment_horizon > 20:
+            equity_allocation = min(80, 120 - age)
+            bond_allocation = max(10, age - 20)
+            reit_allocation = 20
+        else:  # Moderate
+            equity_allocation = 100 - age
+            bond_allocation = age
+            reit_allocation = 15
+
+        # Normalize allocations to 100%
+        total = equity_allocation + bond_allocation + reit_allocation
+        equity_allocation = (equity_allocation / total) * 100
+        bond_allocation = (bond_allocation / total) * 100
+        reit_allocation = (reit_allocation / total) * 100
+
+        recommendations = []
+        monthly_capacity = financial_metrics.get('monthly_savings_capacity', 3000)
+
+        # Select best performing instruments by category
+        # Equity recommendations
+        equity_instruments = merged_df[merged_df['category'].str.contains('Stock|ETF|Equity', case=False, na=False)]
+        if not equity_instruments.empty:
+            # Sort by risk-adjusted returns (Sharpe ratio)
+            equity_instruments = equity_instruments.sort_values(['sharpe_ratio', 'one_year_return'], ascending=False, na_position='last')
+            top_equity = equity_instruments.head(2)  # Top 2 equity instruments
+
+            allocation_per_equity = equity_allocation / len(top_equity)
+            for _, instrument in top_equity.iterrows():
+                recommendations.append({
+                    'symbol': instrument['symbol'],
+                    'name': instrument['name'],
+                    'category': 'Equity',
+                    'allocation_percentage': round(allocation_per_equity, 1),
+                    'investment_amount': round(monthly_capacity * (allocation_per_equity / 100), 2),
+                    'rationale': f"Selected for {risk_tolerance} risk profile. {instrument['description']}. Expected return: {clean_nan_values(instrument.get('one_year_return', 0.08)) or 0.08*100:.1f}%",
+                    'risk_level': instrument['risk_level'],
+                    'expected_return': clean_nan_values(instrument.get('one_year_return', 0.08)) or 0.08,
+                    'market': instrument['market'],
+                    'platform_recommendation': get_wio_platform_recommendation('Equity', instrument['market'])
+                })
+
+        # Bond recommendations
+        bond_instruments = merged_df[merged_df['category'].str.contains('Bond|Sukuk', case=False, na=False)]
+        if not bond_instruments.empty and bond_allocation > 0:
+            bond_instruments = bond_instruments.sort_values(['dividend_yield', 'sharpe_ratio'], ascending=False, na_position='last')
+            top_bond = bond_instruments.head(1).iloc[0]
+
+            recommendations.append({
+                'symbol': top_bond['symbol'],
+                'name': top_bond['name'],
+                'category': 'Fixed Income',
+                'allocation_percentage': round(bond_allocation, 1),
+                'investment_amount': round(monthly_capacity * (bond_allocation / 100), 2),
+                'rationale': f"Provides stability for {risk_tolerance} investor. {top_bond['description']}. Yield: {clean_nan_values(top_bond.get('dividend_yield', 3.5)) or 3.5:.1f}%",
+                'risk_level': top_bond['risk_level'],
+                'expected_return': (clean_nan_values(top_bond.get('dividend_yield', 3.5)) or 3.5) / 100,
+                'market': top_bond['market'],
+                'platform_recommendation': get_wio_platform_recommendation('Fixed Income', top_bond['market'])
+            })
+
+        # REIT recommendations
+        reit_instruments = merged_df[merged_df['category'].str.contains('REIT|Real Estate', case=False, na=False)]
+        if not reit_instruments.empty and reit_allocation > 0:
+            reit_instruments = reit_instruments.sort_values(['dividend_yield', 'one_year_return'], ascending=False, na_position='last')
+            top_reit = reit_instruments.head(1).iloc[0]
+
+            recommendations.append({
+                'symbol': top_reit['symbol'],
+                'name': top_reit['name'],
+                'category': 'Real Estate',
+                'allocation_percentage': round(reit_allocation, 1),
+                'investment_amount': round(monthly_capacity * (reit_allocation / 100), 2),
+                'rationale': f"Diversification and inflation hedge. {top_reit['description']}. Dividend yield: {clean_nan_values(top_reit.get('dividend_yield', 3.5)) or 3.5:.1f}%",
+                'risk_level': top_reit['risk_level'],
+                'expected_return': clean_nan_values(top_reit.get('one_year_return', 0.07)) or 0.07,
+                'market': top_reit['market'],
+                'platform_recommendation': get_wio_platform_recommendation('Real Estate', top_reit['market'])
+            })
+
+        db.close()
+        print(f"*** generate_dynamic_recommendations ***: {len(recommendations)} instruments")
+        return recommendations
+
+    except Exception as e:
+        print(f"Error generating dynamic recommendations: {e}")
+        return []
+
 def parse_llm_response_to_structured_data(llm_response, user_data, financial_metrics):
     """Parse LLM response into structured data for React UI"""
     
@@ -743,104 +946,214 @@ def parse_llm_response_to_structured_data(llm_response, user_data, financial_met
         match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
         return match.group(1).strip() if match else ""
     
-    # Parse different sections
-    executive_summary = extract_section(r'EXECUTIVE SUMMARY[:\s]*\n(.*?)(?=\n\d+\.|\n[A-Z]|\Z)', llm_response)
-    portfolio_recommendations = extract_section(r'PORTFOLIO RECOMMENDATIONS[:\s]*\n(.*?)(?=\n\d+\.|\n[A-Z]|\Z)', llm_response)
-    risk_assessment = extract_section(r'RISK ASSESSMENT[:\s]*\n(.*?)(?=\n\d+\.|\n[A-Z]|\Z)', llm_response)
-    time_horizon = extract_section(r'TIME HORIZON ANALYSIS[:\s]*\n(.*?)(?=\n\d+\.|\n[A-Z]|\Z)', llm_response)
-    monthly_savings = extract_section(r'MONTHLY SAVINGS NEEDED[:\s]*\n(.*?)(?=\n\d+\.|\n[A-Z]|\Z)', llm_response)
-    # goal_timeline = extract_section(r'GOAL ACHIEVEMENT TIMELINE[:\s]*\n(.*?)(?=\n\d+\.|\n[A-Z]|\Z)', llm_response)  # Not used - we create structured timeline below
-    additional_advice = extract_section(r'ADDITIONAL ADVICE[:\s]*\n(.*?)(?=\n\d+\.|\n[A-Z]|\Z)', llm_response)
-    compliance_notes = extract_section(r'COMPLIANCE NOTES[:\s]*\n(.*?)(?=\n\d+\.|\n[A-Z]|\Z)', llm_response)
-    
-    # Parse portfolio recommendations into structured format
-    recommendations = []
-    if portfolio_recommendations:
-        lines = portfolio_recommendations.split('\n')
-        for line in lines:
-            if '-' in line and '%' in line:
-                # Extract investment details
-                parts = line.strip('- ').split(':')
-                if len(parts) >= 2:
-                    name_part = parts[0].strip()
-                    details_part = parts[1].strip()
-                    
-                    # Extract percentage
-                    percentage_match = re.search(r'(\d+(?:\.\d+)?)%', details_part)
-                    percentage = float(percentage_match.group(1)) if percentage_match else 20.0
-                    
-                    # Determine category based on name
-                    category = 'Investment'
-                    if any(keyword in name_part.lower() for keyword in ['stock', 'equity', 'etf']):
-                        category = 'Equity'
-                    elif any(keyword in name_part.lower() for keyword in ['bond', 'fixed', 'saving']):
-                        category = 'Fixed Income'
-                    elif any(keyword in name_part.lower() for keyword in ['reit', 'real estate']):
-                        category = 'Real Estate'
+    print(f"parse_llm_response_to_structured_data")
 
+    # Parse different sections with improved regex patterns to handle numbered sections
+    executive_summary = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?EXECUTIVE SUMMARY(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?[A-Z]|\Z)', llm_response)
+
+    # More precise portfolio recommendations extraction - only capture actual investment recommendations
+    portfolio_recommendations = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?PORTFOLIO RECOMMENDATIONS(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?(?:RISK ASSESSMENT|TIME HORIZON|MONTHLY SAVINGS|ADDITIONAL ADVICE|COMPLIANCE)|\Z)', llm_response)
+
+    # If the above doesn't work, try alternative patterns but be more selective
+    if not portfolio_recommendations or len(portfolio_recommendations.strip()) < 50:
+        print("🔍 DEBUG - First extraction failed, trying alternative patterns...")
+
+        # Try to find the section that starts with PORTFOLIO RECOMMENDATIONS and includes investment items
+        portfolio_match = re.search(r'(?:\*\*)?PORTFOLIO RECOMMENDATIONS(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\*\*)?(?:RISK ASSESSMENT|TIME HORIZON|MONTHLY SAVINGS|ADDITIONAL ADVICE|COMPLIANCE)|\Z)', llm_response, re.DOTALL)
+        if portfolio_match:
+            portfolio_recommendations = portfolio_match.group(1)
+            print(f"🔍 DEBUG - Alternative pattern 1 found: {len(portfolio_recommendations)} chars")
+        else:
+            # Try to find any section with investment allocations (but not return percentages)
+            portfolio_match = re.search(r'((?:[*•-]\s*\*\*.*?(?:ETF|Stock|Bond|Fund|Investment|Inc\.|UCITS|Equity|Growth|Real Estate).*?(?:\d+(?:\.\d+)?)%.*?\n(?:.*?Rationale:.*?\n)?)+)', llm_response, re.DOTALL)
+            if portfolio_match:
+                portfolio_recommendations = portfolio_match.group(1)
+                print(f"🔍 DEBUG - Alternative pattern 2 found: {len(portfolio_recommendations)} chars")
+            else:
+                # Last resort: find numbered investment list with allocation percentages
+                portfolio_match = re.search(r'((?:\d+\.\s*\*\*.*?(?:ETF|Stock|Bond|Fund|Investment|Inc\.|UCITS|Equity|Growth|Real Estate).*?(?:\d+(?:\.\d+)?)%.*?\n(?:.*?\n)*?)+)', llm_response, re.DOTALL)
+                if portfolio_match:
+                    portfolio_recommendations = portfolio_match.group(1)
+                    print(f"🔍 DEBUG - Alternative pattern 3 found: {len(portfolio_recommendations)} chars")
+
+    risk_assessment = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?RISK ASSESSMENT(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?[A-Z]|\Z)', llm_response)
+    time_horizon = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?TIME HORIZON ANALYSIS(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?[A-Z]|\Z)', llm_response)
+    monthly_savings = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?MONTHLY SAVINGS NEEDED(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?[A-Z]|\Z)', llm_response)
+    # goal_timeline = extract_section(r'GOAL ACHIEVEMENT TIMELINE[:\s]*\n(.*?)(?=\n\d+\.|\n[A-Z]|\Z)', llm_response)  # Not used - we create structured timeline below
+    additional_advice = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?ADDITIONAL ADVICE(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?[A-Z]|\Z)', llm_response)
+    compliance_notes = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?COMPLIANCE NOTES(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?[A-Z]|\Z)', llm_response)
+    
+    # Parse portfolio recommendations into structured format with improved extraction
+    recommendations = []
+    print(f"🔍 DEBUG - portfolio_recommendations extracted: '{portfolio_recommendations}'")
+    print(f"🔍 DEBUG - portfolio_recommendations length: {len(portfolio_recommendations) if portfolio_recommendations else 0}")
+
+    # Also print first 500 chars of LLM response to debug
+    print(f"🔍 DEBUG - LLM response preview: {llm_response[:500]}...")
+
+    if portfolio_recommendations:
+        # Use more precise parsing patterns to extract only actual investment recommendations
+        lines = portfolio_recommendations.split('\n')
+
+        # Parse multi-line instrument blocks with stricter filtering
+        current_instrument = None
+        i = 0
+
+        while i < len(lines):
+            line = lines[i].strip()
+            if not line:
+                i += 1
+                continue
+
+            # Pattern 1: "* **Investment Name:** XX%" (most common format)
+            pattern1 = re.search(r'[*•-]\s*\*\*(.+?):\*\*\s*(\d+(?:\.\d+)?)%', line)
+            if pattern1:
+                name_part = pattern1.group(1).strip()
+                percentage = float(pattern1.group(2))
+
+                # Only process if it looks like an actual investment (contains investment keywords)
+                if any(investment_word in name_part.lower() for investment_word in [
+                    'etf', 'fund', 'stock', 'bond', 'equity', 'reit', 'investment', 'trust', 'inc', 'corp',
+                    'bank', 'properties', 'oil', 'tech', 'growth', 'treasury', 'sukuk', 'gold', 'silver',
+                    'tesla', 'apple', 'microsoft', 'amazon', 'google', 'emirates', 'adnoc', 'aldar', 'fab'
+                ]) and not any(skip_word in name_part.lower() for skip_word in [
+                    'expected annual return', 'annual return', 'return', 'expected return',
+                    'risk level', 'sharpe ratio', 'volatility', 'expense ratio',
+                    'dividend yield', 'beta', 'standard deviation', 'correlation'
+                ]):
+                    # Look ahead for additional details
+                    additional_details = []
+                    j = i + 1
+                    while j < len(lines) and lines[j].strip() and not re.search(r'[*•-]\s*\*\*.*?:\*\*\s*\d+(?:\.\d+)?%', lines[j]):
+                        additional_details.append(lines[j].strip())
+                        j += 1
+
+                    full_details = line
+                    if additional_details:
+                        full_details += " " + " ".join(additional_details)
+
+                    current_instrument = {
+                        'name_part': name_part,
+                        'percentage': percentage,
+                        'details_part': full_details,
+                        'line': line
+                    }
+
+                i = j if 'j' in locals() else i + 1
+            else:
+                # Pattern 2: "1. **Investment Name (XX%):**" or similar numbered format
+                pattern2 = re.search(r'(\d+)\.\s*\*\*(.+?)\s*\((\d+(?:\.\d+)?)%\)', line)
+                if pattern2:
+                    name_part = pattern2.group(2).strip()
+                    percentage = float(pattern2.group(3))
+
+                    # Only process if it looks like an actual investment
+                    if any(investment_word in name_part.lower() for investment_word in [
+                        'etf', 'fund', 'stock', 'bond', 'equity', 'reit', 'investment', 'trust', 'inc', 'corp',
+                        'bank', 'properties', 'oil', 'tech', 'growth', 'treasury', 'sukuk', 'gold', 'silver',
+                        'tesla', 'apple', 'microsoft', 'amazon', 'google', 'emirates', 'adnoc', 'aldar', 'fab'
+                    ]):
+                        # Look ahead for additional details
+                        additional_details = []
+                        j = i + 1
+                        while j < len(lines) and lines[j].strip() and not re.search(r'\d+\.\s*\*\*.*?\*\*', lines[j]):
+                            additional_details.append(lines[j].strip())
+                            j += 1
+
+                        full_details = line
+                        if additional_details:
+                            full_details += " " + " ".join(additional_details)
+
+                        current_instrument = {
+                            'name_part': name_part,
+                            'percentage': percentage,
+                            'details_part': full_details,
+                            'line': line
+                        }
+
+                    i = j if 'j' in locals() else i + 1
+                else:
+                    i += 1
+                    continue
+
+            # Process the current instrument
+            if current_instrument:
+                name_part = current_instrument['name_part']
+                percentage = current_instrument['percentage']
+                details_part = current_instrument['details_part']
+                investment_amount = (financial_metrics['monthly_savings_capacity'] * percentage / 100)
+
+                # Extract symbol if present in parentheses
+                symbol_match = re.search(r'\(([A-Z0-9]+)\)', name_part)
+                if not symbol_match:
+                    # Try to extract from details
+                    symbol_match = re.search(r'\(([A-Z0-9]+)\)', details_part)
+                symbol = symbol_match.group(1) if symbol_match else name_part[:10].upper().replace(' ', '')
+
+                # Clean name by removing symbol in parentheses
+                clean_name = re.sub(r'\s*\([^)]+\)', '', name_part).strip()
+
+                # Determine category based on name and context
+                category = 'Investment'
+                name_lower = clean_name.lower()
+                details_lower = details_part.lower()
+
+                if any(keyword in name_lower + details_lower for keyword in ['stock', 'equity', 'etf', 'share', 'growth', 'tech', 'large-cap', 'nasdaq']):
+                    category = 'Equity'
+                elif any(keyword in name_lower + details_lower for keyword in ['bond', 'fixed', 'saving', 'treasury', 'sukuk']):
+                    category = 'Fixed Income'
+                elif any(keyword in name_lower + details_lower for keyword in ['reit', 'real estate', 'property']):
+                    category = 'Real Estate'
+                elif any(keyword in name_lower + details_lower for keyword in ['commodity', 'gold', 'oil']):
+                    category = 'Commodities'
+
+                # Extract expected return if mentioned
+                return_match = re.search(r'(\d+(?:\.\d+)?)%.*return', details_part.lower())
+                expected_return = float(return_match.group(1)) / 100 if return_match else 0.08
+
+                # Extract risk level if mentioned
+                risk_match = re.search(r'risk.*?(\d+)', details_part.lower())
+                risk_level = int(risk_match.group(1)) if risk_match else 5
+
+                # Extract rationale (everything after "Rationale:")
+                rationale_match = re.search(r'rationale[:\s]*(.+?)(?:\.|$)', details_part, re.IGNORECASE)
+                rationale = rationale_match.group(1).strip() if rationale_match else f"Recommended for {user_data.get('risk_tolerance', 'moderate')} risk profile"
+
+                # Calculate projected wealth for this instrument
+                years_to_retirement = user_data.get('retirement_age', 65) - user_data.get('age', 35)
+                monthly_investment = investment_amount
+                projected_value = calculate_projected_wealth(monthly_investment, expected_return, years_to_retirement)
+
+                print(f"Parsed: {clean_name} ({symbol}) - {percentage}% - Category: {category}")
+
+                if percentage > 0:  # Only add if we found a valid percentage
                     recommendations.append({
-                        'symbol': name_part[:10],  # Truncate for symbol
-                        'name': name_part,
+                        'symbol': symbol,
+                        'name': clean_name,
                         'category': category,
-                        'allocation_percentage': percentage,
-                        'investment_amount': (financial_metrics['monthly_savings_capacity'] * percentage / 100),
-                        'rationale': details_part,
-                        'risk_level': 5,  # Default
-                        'expected_return': 0.08,  # Default
+                        'allocation_percentage': float(percentage),
+                        'investment_amount': float(investment_amount),
+                        'rationale': rationale,
+                        'risk_level': int(risk_level),
+                        'expected_return': float(expected_return),
+                        'projected_wealth': float(projected_value),
                         'market': user_data.get('preferred_market', 'UAE'),
                         'platform_recommendation': get_wio_platform_recommendation(category, user_data.get('preferred_market', 'UAE'))
                     })
+
+                current_instrument = None  # Reset for next instrument
     
-    # Get specific instrument recommendations from database
-    specific_recommendations = get_specific_instrument_recommendations(user_data)
+    # Use LLM-generated recommendations instead of static database ones
+    # The recommendations should come from the LLM response, not predefined database entries
+    print(f"Using LLM-generated recommendations: {len(recommendations)} instruments")
 
-    # If we have specific recommendations, use them; otherwise use parsed or fallback
-    if specific_recommendations:
-        recommendations = specific_recommendations
+    # If no LLM recommendations were parsed, create dynamic fallback based on user profile
+    if not recommendations:
+        # Generate dynamic recommendations using available instruments from database
+        recommendations = generate_dynamic_recommendations(user_data, financial_metrics)
+        
+    print(f"Using generate_dynamic_recommendations: {len(recommendations)} instruments")
 
-        # Assign allocations based on risk profile
-        risk_map = {'conservative': 3, 'moderate': 6, 'aggressive': 9}
-        risk_level = risk_map.get(user_data['risk_tolerance'], 6)
-
-        # Define allocation strategy based on risk level
-        if risk_level <= 4:  # Conservative
-            allocations = {'Fixed Income': 60, 'Equity': 30, 'Real Estate': 10}
-        elif risk_level <= 7:  # Moderate
-            allocations = {'Equity': 50, 'Fixed Income': 35, 'Real Estate': 15}
-        else:  # Aggressive
-            allocations = {'Equity': 70, 'Fixed Income': 20, 'Real Estate': 10}
-
-        # Assign allocations to recommendations
-        monthly_capacity = financial_metrics.get('monthly_savings_capacity', 3000)
-        for rec in recommendations:
-            category = rec['category']
-            if category in allocations:
-                rec['allocation_percentage'] = allocations[category]
-                rec['investment_amount'] = monthly_capacity * (allocations[category] / 100)
-
-    # If no recommendations available, create fallback ones
-    elif not recommendations:
-        risk_map = {'conservative': 3, 'moderate': 6, 'aggressive': 9}
-        risk_level = risk_map.get(user_data['risk_tolerance'], 6)
-
-        if risk_level <= 4:  # Conservative
-            recommendations = [
-                {'symbol': 'BONDS', 'name': 'Government Bonds', 'category': 'Fixed Income', 'allocation_percentage': 60, 'investment_amount': financial_metrics['monthly_savings_capacity'] * 0.6, 'rationale': 'Stable income with low risk', 'risk_level': 2, 'expected_return': 0.04, 'market': user_data.get('preferred_market', 'UAE')},
-                {'symbol': 'EQUITY', 'name': 'Blue Chip Stocks', 'category': 'Equity', 'allocation_percentage': 30, 'investment_amount': financial_metrics['monthly_savings_capacity'] * 0.3, 'rationale': 'Stable dividend-paying companies', 'risk_level': 4, 'expected_return': 0.07, 'market': user_data.get('preferred_market', 'UAE')},
-                {'symbol': 'CASH', 'name': 'Money Market', 'category': 'Cash', 'allocation_percentage': 10, 'investment_amount': financial_metrics['monthly_savings_capacity'] * 0.1, 'rationale': 'Emergency fund and liquidity', 'risk_level': 1, 'expected_return': 0.02, 'market': user_data.get('preferred_market', 'UAE')}
-            ]
-        elif risk_level <= 7:  # Moderate
-            recommendations = [
-                {'symbol': 'EQUITY', 'name': 'Diversified Equity Fund', 'category': 'Equity', 'allocation_percentage': 50, 'investment_amount': financial_metrics['monthly_savings_capacity'] * 0.5, 'rationale': 'Balanced growth potential', 'risk_level': 5, 'expected_return': 0.08, 'market': user_data.get('preferred_market', 'UAE')},
-                {'symbol': 'BONDS', 'name': 'Corporate Bonds', 'category': 'Fixed Income', 'allocation_percentage': 35, 'investment_amount': financial_metrics['monthly_savings_capacity'] * 0.35, 'rationale': 'Steady income with moderate risk', 'risk_level': 3, 'expected_return': 0.05, 'market': user_data.get('preferred_market', 'UAE')},
-                {'symbol': 'REIT', 'name': 'Real Estate Investment Trust', 'category': 'Real Estate', 'allocation_percentage': 15, 'investment_amount': financial_metrics['monthly_savings_capacity'] * 0.15, 'rationale': 'Diversification and inflation hedge', 'risk_level': 4, 'expected_return': 0.07, 'market': user_data.get('preferred_market', 'UAE')}
-            ]
-        else:  # Aggressive
-            recommendations = [
-                {'symbol': 'GROWTH', 'name': 'Growth Stocks', 'category': 'Equity', 'allocation_percentage': 70, 'investment_amount': financial_metrics['monthly_savings_capacity'] * 0.7, 'rationale': 'High growth potential for long-term wealth building', 'risk_level': 7, 'expected_return': 0.10, 'market': user_data.get('preferred_market', 'UAE')},
-                {'symbol': 'INTL', 'name': 'International Equity', 'category': 'Equity', 'allocation_percentage': 20, 'investment_amount': financial_metrics['monthly_savings_capacity'] * 0.2, 'rationale': 'Global diversification', 'risk_level': 6, 'expected_return': 0.09, 'market': 'US'},
-                {'symbol': 'BONDS', 'name': 'High-Yield Bonds', 'category': 'Fixed Income', 'allocation_percentage': 10, 'investment_amount': financial_metrics['monthly_savings_capacity'] * 0.1, 'rationale': 'Higher income potential', 'risk_level': 5, 'expected_return': 0.06, 'market': user_data.get('preferred_market', 'UAE')}
-            ]
     
     # Calculate total allocation
     total_allocation = {}
@@ -867,30 +1180,42 @@ def parse_llm_response_to_structured_data(llm_response, user_data, financial_met
             "Consider tax-efficient investment vehicles"
         ]
 
-    # Create structured goal achievement timeline
+    # Calculate total projected wealth
+    total_monthly_investment = sum(rec['investment_amount'] for rec in recommendations)
+    weighted_avg_return = sum(rec['expected_return'] * rec['allocation_percentage']/100 for rec in recommendations) if recommendations else 0.08
+    investment_horizon = financial_metrics['investment_horizon']
+    total_projected_wealth = calculate_projected_wealth(total_monthly_investment, weighted_avg_return, investment_horizon)
+
+    # Create structured goal achievement timeline (React UI expects Record<string, number>)
     goal_achievement_timeline = {}
     user_goals = user_data.get('goals', ['retirement'])
     investment_horizon = financial_metrics['investment_horizon']
 
     for goal in user_goals:
         if goal.lower() == 'retirement':
-            goal_achievement_timeline[goal] = investment_horizon
-        elif goal.lower() in ['house_purchase', 'education']:
+            years_to_goal = investment_horizon
+            goal_achievement_timeline[goal] = years_to_goal
+        elif goal.lower() in ['house_purchase', 'house', 'education']:
             # Shorter term goals
-            goal_achievement_timeline[goal] = min(10, investment_horizon)
-        elif goal.lower() in ['wealth_building', 'emergency_fund']:
+            years_to_goal = min(10, investment_horizon)
+            goal_achievement_timeline[goal] = years_to_goal
+        elif goal.lower() in ['wealth_building', 'emergency_fund', 'emergency']:
             # Medium term goals
-            goal_achievement_timeline[goal] = min(15, investment_horizon)
+            years_to_goal = min(15, investment_horizon)
+            goal_achievement_timeline[goal] = years_to_goal
         elif goal.lower() == 'travel':
             # Short term goal
-            goal_achievement_timeline[goal] = min(5, investment_horizon)
+            years_to_goal = min(5, investment_horizon)
+            goal_achievement_timeline[goal] = years_to_goal
         else:
             # Default timeline
-            goal_achievement_timeline[goal] = min(12, investment_horizon)
+            years_to_goal = min(12, investment_horizon)
+            goal_achievement_timeline[goal] = years_to_goal
 
     # If no goals specified, add retirement as default
     if not goal_achievement_timeline:
-        goal_achievement_timeline['retirement'] = investment_horizon
+        years_to_goal = investment_horizon
+        goal_achievement_timeline['retirement'] = years_to_goal
 
     return {
         'user_profile': {
@@ -911,12 +1236,13 @@ def parse_llm_response_to_structured_data(llm_response, user_data, financial_met
         'total_allocation': total_allocation,
         'risk_assessment': risk_assessment or f"Your {user_data['risk_tolerance']} risk profile is suitable for your {financial_metrics['investment_horizon']}-year investment horizon",
         'time_horizon_analysis': time_horizon or f"With {financial_metrics['investment_horizon']} years until retirement, you have time for growth-oriented investments",
-        'expected_portfolio_return': sum(rec['expected_return'] * rec['allocation_percentage']/100 for rec in recommendations),
+        'expected_portfolio_return': weighted_avg_return,
+        'total_projected_wealth': total_projected_wealth,
         'monthly_savings_needed': financial_metrics['additional_monthly_needed'],
         'goal_achievement_timeline': goal_achievement_timeline,
         'additional_advice': advice_list,
         'compliance_notes': compliance_notes or ("Sharia-compliant investments recommended" if user_data['is_sharia_compliant'] else ""),
-        'executive_summary': executive_summary or f"Based on your profile, you need ${financial_metrics['additional_monthly_needed']:,.0f} additional monthly savings to meet your retirement goals",
+        'executive_summary': executive_summary or f"Based on your profile, with ${total_monthly_investment:,.0f} monthly investment, you are projected to accumulate approximately ${total_projected_wealth:,.0f} by age {user_data['retirement_age']}.",
         'financial_metrics': financial_metrics,
         'raw_llm_response': llm_response if OLLAMA_AVAILABLE else "LLM not available - using rule-based recommendations"
     }
@@ -965,6 +1291,8 @@ def generate_financial_plan():
 
         llm_response = "LLM not available - using rule-based financial planning"
 
+        print(f"llm_response: {llm_response}")
+
         # Generate session and user IDs for tracking
         session_id = str(uuid.uuid4())
         user_id = user_data.get('user_id', f"user_{uuid.uuid4().hex[:8]}")
@@ -993,21 +1321,52 @@ def generate_financial_plan():
 
                 # Generate AI response using Ollama with adaptive context
                 chain = adaptive_prompt | model
-                llm_response = chain.invoke({
-                    'instruments': instruments_context,
-                    'age': user_data['age'],
-                    'retirement_age': user_data['retirement_age'],
-                    'annual_income': user_data['annual_salary'],
-                    'annual_expenses': user_data['annual_expenses'],
-                    'current_savings': user_data['current_savings'],
-                    'risk_tolerance': user_data.get('risk_tolerance', 'moderate'),
-                    'goals': ', '.join(user_data.get('goals', [])),
-                    'is_sharia_compliant': 'Yes' if user_data.get('is_sharia_compliant', False) else 'No',
-                    'preferred_market': user_data.get('preferred_market', 'UAE'),
-                    'investment_horizon': financial_metrics['investment_horizon'],
-                    'monthly_savings_capacity': financial_metrics['monthly_savings_capacity'],
-                    'savings_rate': financial_metrics['savings_rate']
-                })
+
+                # Try with the adaptive prompt first
+                try:
+                    llm_response = chain.invoke({
+                        'instruments': instruments_context,
+                        'age': user_data['age'],
+                        'retirement_age': user_data['retirement_age'],
+                        'annual_income': user_data['annual_salary'],
+                        'annual_expenses': user_data['annual_expenses'],
+                        'current_savings': user_data['current_savings'],
+                        'risk_tolerance': user_data.get('risk_tolerance', 'moderate'),
+                        'goals': ', '.join(user_data.get('goals', [])),
+                        'is_sharia_compliant': 'Yes' if user_data.get('is_sharia_compliant', False) else 'No',
+                        'preferred_market': user_data.get('preferred_market', 'UAE'),
+                        'investment_horizon': financial_metrics['investment_horizon'],
+                        'monthly_savings_capacity': financial_metrics['monthly_savings_capacity'],
+                        'savings_rate': financial_metrics['savings_rate']
+                    })
+
+                    # Check if response is too short or unhelpful
+                    if len(llm_response.strip()) < 100 or "can't help" in llm_response.lower():
+                        print("⚠️ LLM response too short, trying simpler prompt...")
+                        raise Exception("Response too short")
+
+                except Exception as e:
+                    print(f"⚠️ Adaptive prompt failed: {e}, trying simpler prompt...")
+                    # Fallback to simpler prompt
+                    simple_prompt = ChatPromptTemplate.from_template("""
+                    Create a financial plan for a {age}-year-old with ${annual_income:,.0f} income, ${current_savings:,.0f} savings, {risk_tolerance} risk tolerance, retiring at {retirement_age}.
+
+                    Provide:
+                    1. EXECUTIVE SUMMARY
+                    2. PORTFOLIO RECOMMENDATIONS (3-4 investments with percentages)
+                    3. RISK ASSESSMENT
+                    4. MONTHLY SAVINGS NEEDED
+                    5. ADDITIONAL ADVICE
+                    """)
+
+                    simple_chain = simple_prompt | model
+                    llm_response = simple_chain.invoke({
+                        'age': user_data['age'],
+                        'retirement_age': user_data['retirement_age'],
+                        'annual_income': user_data['annual_salary'],
+                        'current_savings': user_data['current_savings'],
+                        'risk_tolerance': user_data.get('risk_tolerance', 'moderate')
+                    })
                 
                 print(f"LLM Response: {llm_response}")
 
@@ -1080,7 +1439,28 @@ def generate_financial_plan():
             'feedback_samples_used': response_strategy.get('total_feedback_samples', 0)
         }
 
-        return jsonify(structured_plan)
+        # Clean all values for JSON serialization
+        def clean_for_json(obj):
+            """Recursively clean object for JSON serialization"""
+            import numpy as np
+
+            if isinstance(obj, dict):
+                return {k: clean_for_json(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [clean_for_json(item) for item in obj]
+            elif isinstance(obj, (np.integer, np.int64, np.int32)):
+                return int(obj)
+            elif isinstance(obj, (np.floating, np.float64, np.float32)):
+                return float(obj) if not np.isnan(obj) else None
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif obj is None or isinstance(obj, (str, int, float, bool)):
+                return obj
+            else:
+                return str(obj)
+
+        cleaned_plan = clean_for_json(structured_plan)
+        return jsonify(cleaned_plan)
         
     except Exception as e:
         print(f"Error generating financial plan: {e}")
