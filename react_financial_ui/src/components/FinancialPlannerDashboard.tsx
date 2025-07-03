@@ -101,16 +101,46 @@ interface ResponseMetadata {
   timestamp: string;
 }
 
+interface RiskAssessment {
+  risk_level?: string;
+  description: string;
+  suitability?: string;
+  recommended_allocation?: string;
+  time_factor?: string;
+  age_factor?: string;
+}
+
+interface TimeHorizonAnalysis {
+  horizon_category?: string;
+  strategy?: string;
+  flexibility?: string;
+  milestones?: {
+    short_term?: string;
+    medium_term?: string;
+    long_term?: string;
+  };
+  retirement_readiness?: string;
+  description?: string;
+}
+
+interface GoalRiskMitigation {
+  [goalName: string]: {
+    risks: string[];
+    mitigation: string[];
+  };
+}
+
 interface FinancialPlan {
   user_profile: UserProfile;
   recommendations: Recommendation[];
   total_allocation: Record<string, number>;
-  risk_assessment: string;
-  time_horizon_analysis: string;
+  risk_assessment: RiskAssessment | string;
+  time_horizon_analysis: TimeHorizonAnalysis | string;
   expected_portfolio_return: number;
   monthly_savings_needed: number;
   goal_achievement_timeline: Record<string, number>;
   additional_advice: string[];
+  goal_risks_mitigation?: GoalRiskMitigation;
   compliance_notes: string;
   evaluation_metadata?: EvaluationMetadata;
   response_metadata?: ResponseMetadata;
@@ -204,8 +234,25 @@ const sampleFinancialPlan: FinancialPlan = {
     "Islamic Bond": 25,
     "Commodity ETF": 20
   },
-  risk_assessment: "Moderate risk portfolio suitable for long-term growth with Islamic compliance",
-  time_horizon_analysis: "20-year horizon allows for equity allocation while maintaining stability",
+  risk_assessment: {
+    risk_level: "Moderate Risk (5/10)",
+    description: "Balanced approach between growth and stability with Islamic compliance",
+    suitability: "Long-term investors comfortable with market fluctuations",
+    recommended_allocation: "Mix of Sharia-compliant stocks, Islamic bonds, and alternative investments",
+    time_factor: "With 20 years to invest, moderate risk tolerance is appropriate",
+    age_factor: "At age 35, you have ample time to recover from market downturns"
+  },
+  time_horizon_analysis: {
+    horizon_category: "Long-term (20 years)",
+    strategy: "Growth-focused strategy with Islamic compliance emphasis",
+    flexibility: "High flexibility to weather market cycles",
+    milestones: {
+      short_term: "Years 1-5: Build emergency fund and establish halal investment routine",
+      medium_term: "Years 6-15: Accumulate wealth through Sharia-compliant instruments",
+      long_term: "Years 16-20: Maximize growth while preparing for retirement"
+    },
+    retirement_readiness: "Target retirement at age 55 with 20 years of Islamic wealth accumulation"
+  },
   expected_portfolio_return: 0.068,
   monthly_savings_needed: 5000,
   goal_achievement_timeline: {
@@ -213,10 +260,42 @@ const sampleFinancialPlan: FinancialPlan = {
     "wealth_building": 15
   },
   additional_advice: [
-    "Consider increasing monthly investment as income grows",
-    "Review portfolio allocation annually",
-    "Maintain emergency fund separate from investments"
+    "Review and rebalance your portfolio quarterly to maintain target allocation",
+    "Increase monthly investments by 5-10% annually as income grows",
+    "Maintain an emergency fund covering 3-6 months of expenses",
+    "Ensure all investments maintain Sharia compliance through regular screening",
+    "Take advantage of long investment horizon with growth-focused allocations"
   ],
+  goal_risks_mitigation: {
+    "retirement": {
+      "risks": [
+        "Market volatility affecting long-term returns",
+        "Inflation eroding purchasing power over time",
+        "Sequence of returns risk near retirement",
+        "Healthcare cost increases in retirement"
+      ],
+      "mitigation": [
+        "Diversified portfolio across asset classes",
+        "Inflation-protected securities allocation",
+        "Gradual shift to conservative investments near retirement",
+        "Health savings account and insurance planning"
+      ]
+    },
+    "wealth_building": {
+      "risks": [
+        "Market cycles affecting growth trajectory",
+        "Lifestyle inflation reducing savings rate",
+        "Economic downturns impacting income",
+        "Lack of investment discipline"
+      ],
+      "mitigation": [
+        "Dollar-cost averaging strategy",
+        "Automatic savings and investment plans",
+        "Emergency fund maintenance",
+        "Regular portfolio reviews and rebalancing"
+      ]
+    }
+  },
   compliance_notes: "All recommendations meet Sharia compliance requirements"
 };
 
@@ -1319,13 +1398,95 @@ const FinancialPlannerDashboard: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-semibold text-gray-900 mb-2">Risk Assessment</h4>
-                    <p className="text-gray-700">{plan.risk_assessment}</p>
+                    <h4 className="font-semibold text-gray-900 mb-3">Risk Assessment</h4>
+                    {typeof plan.risk_assessment === 'string' ? (
+                      <p className="text-gray-700">{plan.risk_assessment}</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {plan.risk_assessment.risk_level && (
+                          <div>
+                            <span className="font-medium text-gray-900">Risk Level: </span>
+                            <span className="text-gray-700">{plan.risk_assessment.risk_level}</span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="font-medium text-gray-900">Description: </span>
+                          <span className="text-gray-700">{plan.risk_assessment.description}</span>
+                        </div>
+                        {plan.risk_assessment.suitability && (
+                          <div>
+                            <span className="font-medium text-gray-900">Suitable For: </span>
+                            <span className="text-gray-700">{plan.risk_assessment.suitability}</span>
+                          </div>
+                        )}
+                        {plan.risk_assessment.recommended_allocation && (
+                          <div>
+                            <span className="font-medium text-gray-900">Focus: </span>
+                            <span className="text-gray-700">{plan.risk_assessment.recommended_allocation}</span>
+                          </div>
+                        )}
+                        {plan.risk_assessment.time_factor && (
+                          <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded">
+                            {plan.risk_assessment.time_factor}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-semibold text-gray-900 mb-2">Time Horizon Analysis</h4>
-                    <p className="text-gray-700">{plan.time_horizon_analysis}</p>
+                    <h4 className="font-semibold text-gray-900 mb-3">Time Horizon Analysis</h4>
+                    {typeof plan.time_horizon_analysis === 'string' ? (
+                      <p className="text-gray-700">{plan.time_horizon_analysis}</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {plan.time_horizon_analysis.horizon_category && (
+                          <div>
+                            <span className="font-medium text-gray-900">Timeline: </span>
+                            <span className="text-gray-700">{plan.time_horizon_analysis.horizon_category}</span>
+                          </div>
+                        )}
+                        {plan.time_horizon_analysis.strategy && (
+                          <div>
+                            <span className="font-medium text-gray-900">Strategy: </span>
+                            <span className="text-gray-700">{plan.time_horizon_analysis.strategy}</span>
+                          </div>
+                        )}
+                        {plan.time_horizon_analysis.flexibility && (
+                          <div>
+                            <span className="font-medium text-gray-900">Flexibility: </span>
+                            <span className="text-gray-700">{plan.time_horizon_analysis.flexibility}</span>
+                          </div>
+                        )}
+                        {plan.time_horizon_analysis.milestones && (
+                          <div className="mt-3">
+                            <span className="font-medium text-gray-900 block mb-2">Investment Milestones:</span>
+                            <div className="space-y-1 text-sm">
+                              {plan.time_horizon_analysis.milestones.short_term && (
+                                <div className="text-green-700 bg-green-50 p-2 rounded">
+                                  {plan.time_horizon_analysis.milestones.short_term}
+                                </div>
+                              )}
+                              {plan.time_horizon_analysis.milestones.medium_term && (
+                                <div className="text-yellow-700 bg-yellow-50 p-2 rounded">
+                                  {plan.time_horizon_analysis.milestones.medium_term}
+                                </div>
+                              )}
+                              {plan.time_horizon_analysis.milestones.long_term && (
+                                <div className="text-blue-700 bg-blue-50 p-2 rounded">
+                                  {plan.time_horizon_analysis.milestones.long_term}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {plan.time_horizon_analysis.retirement_readiness && (
+                          <div className="text-sm text-purple-600 bg-purple-50 p-2 rounded">
+                            {plan.time_horizon_analysis.retirement_readiness}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1487,12 +1648,18 @@ const FinancialPlannerDashboard: React.FC = () => {
                                     Potential Risks & Challenges
                                   </h5>
                                   <ul className="text-sm text-red-600 space-y-1">
-                                    {goalInfo.risks.map((risk, index) => (
-                                      <li key={index} className="flex items-start">
-                                        <span className="text-red-500 mr-2">•</span>
-                                        {risk}
-                                      </li>
-                                    ))}
+                                    {(() => {
+                                      // Use dynamic data if available, otherwise fall back to static
+                                      const dynamicRisks = plan.goal_risks_mitigation?.[goal]?.risks;
+                                      const risks = dynamicRisks && dynamicRisks.length > 0 ? dynamicRisks : goalInfo.risks;
+
+                                      return risks.map((risk, index) => (
+                                        <li key={index} className="flex items-start">
+                                          <span className="text-red-500 mr-2">•</span>
+                                          {risk}
+                                        </li>
+                                      ));
+                                    })()}
                                   </ul>
                                 </div>
                                 <div>
@@ -1501,12 +1668,18 @@ const FinancialPlannerDashboard: React.FC = () => {
                                     Mitigation Strategies
                                   </h5>
                                   <ul className="text-sm text-green-600 space-y-1">
-                                    {goalInfo.workarounds.map((workaround, index) => (
-                                      <li key={index} className="flex items-start">
-                                        <span className="text-green-500 mr-2">•</span>
-                                        {workaround}
-                                      </li>
-                                    ))}
+                                    {(() => {
+                                      // Use dynamic data if available, otherwise fall back to static
+                                      const dynamicMitigation = plan.goal_risks_mitigation?.[goal]?.mitigation;
+                                      const mitigation = dynamicMitigation && dynamicMitigation.length > 0 ? dynamicMitigation : goalInfo.workarounds;
+
+                                      return mitigation.map((strategy, index) => (
+                                        <li key={index} className="flex items-start">
+                                          <span className="text-green-500 mr-2">•</span>
+                                          {strategy}
+                                        </li>
+                                      ));
+                                    })()}
                                   </ul>
                                 </div>
                               </div>
@@ -1559,6 +1732,23 @@ const FinancialPlannerDashboard: React.FC = () => {
 
                   {plan.raw_llm_response ? (
                     <div className="space-y-6">
+                      {/* Parse and display LLM response sections */}
+                      {/* {(() => {
+                        const sections = parseLLMResponseSections(plan.raw_llm_response);
+                        return Object.entries(sections).map(([sectionName, content]) => (
+                          <div key={sectionName} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                            <h4 className="font-semibold text-gray-900 mb-3 text-lg border-b border-gray-200 pb-2">
+                              {sectionName.replace(/_/g, ' ')}
+                            </h4>
+                            <div className="prose prose-sm max-w-none">
+                              <div className="text-gray-700 whitespace-pre-line leading-relaxed">
+                                {content}
+                              </div>
+                            </div>
+                          </div>
+                        ));
+                      })()} */}
+
                       {/* Evaluation Metadata (if available) */}
                       {plan.evaluation_metadata && (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
@@ -1589,6 +1779,8 @@ const FinancialPlannerDashboard: React.FC = () => {
                           </div>
                         </div>
                       )}
+
+
                     </div>
                   ) : (
                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">

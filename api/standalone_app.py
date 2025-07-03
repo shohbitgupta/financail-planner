@@ -545,16 +545,24 @@ List 3-5 SPECIFIC instruments with:
 - Expected annual return based on historical data
 
 3. RISK ASSESSMENT
-Analyze portfolio risk level considering:
-- User's risk tolerance and age
-- Portfolio volatility based on historical data
-- Risk-adjusted returns (Sharpe ratios)
+Provide structured risk analysis with:
+- Risk Level: Specific risk level (e.g., "Moderate Risk (5/10)")
+- Description: Brief description of the risk approach
+- Suitability: Who this risk level is suitable for
+- Allocation Focus: What types of investments to focus on
+- Time Factor: How the investment timeline affects risk tolerance
+- Age Factor: How the client's age impacts risk capacity
 
 4. TIME HORIZON ANALYSIS
-How the {investment_horizon}-year timeline affects:
-- Asset allocation strategy
-- Risk capacity changes over time
-- Rebalancing recommendations
+Provide structured timeline analysis with:
+- Horizon Category: Classify as Short-term/Medium-term/Long-term with years
+- Strategy: Investment strategy based on timeline
+- Flexibility: Level of flexibility available
+- Milestones: Break down into phases:
+  * Short-term (Years 1-5): What to focus on
+  * Medium-term (Years 6-15): Key objectives
+  * Long-term (Years 16+): Final phase goals
+- Retirement Readiness: Assessment of retirement preparation
 
 5. MONTHLY SAVINGS NEEDED
 Calculate specific monthly investment amounts to achieve:
@@ -568,13 +576,22 @@ Realistic timeline for achieving:
 - Each specific goal mentioned
 - Milestone checkpoints
 
-7. ADDITIONAL ADVICE
-Actionable recommendations for:
-- Portfolio rebalancing frequency
-- Tax optimization strategies
-- Risk management approaches
+7. GOAL RISKS AND MITIGATION
+For each major goal (retirement, wealth building, etc.), provide:
+- Goal Name: [Goal Name]
+- Potential Risks: List 3-4 specific risks as bullet points
+- Mitigation Strategies: List 3-4 specific strategies as bullet points
 
-8. COMPLIANCE NOTES
+8. ADDITIONAL ADVICE
+Provide 4-6 specific, actionable pieces of financial advice as bullet points:
+- Tax optimization strategies
+- Emergency fund recommendations
+- Regular review schedule
+- Investment best practices
+- Market-specific advice
+- Compliance considerations
+
+9. COMPLIANCE NOTES
 If Sharia compliance required, specify which recommended instruments are compliant.
 
 CRITICAL: Base ALL recommendations on the actual historical data and instruments provided in the context. Use real performance metrics, not generic assumptions.
@@ -614,6 +631,292 @@ def calculate_projected_wealth(monthly_investment, annual_return, years):
         future_value = monthly_investment * total_months
 
     return future_value
+
+def structure_risk_assessment(raw_text, user_data, financial_metrics):
+    """Structure risk assessment into user-friendly format"""
+    if not raw_text or len(raw_text.strip()) < 10:
+        # Generate structured risk assessment based on user profile
+        risk_tolerance = user_data.get('risk_tolerance', 'moderate').lower()
+        age = user_data.get('age', 35)
+        investment_horizon = financial_metrics.get('investment_horizon', 30)
+
+        # Dynamic risk level calculation based on user profile
+        risk_score = 5  # Default moderate
+        if risk_tolerance == 'conservative':
+            risk_score = 3
+        elif risk_tolerance == 'aggressive':
+            risk_score = 7
+
+        # Adjust based on age and timeline
+        if age < 35 and investment_horizon > 20:
+            risk_score = min(risk_score + 1, 9)
+        elif age > 50 or investment_horizon < 10:
+            risk_score = max(risk_score - 1, 2)
+
+        risk_level_text = f"{risk_tolerance.title()} Risk ({risk_score}/10)"
+
+        # Dynamic descriptions based on actual profile
+        descriptions = {
+            'conservative': 'Capital preservation focused with minimal volatility',
+            'moderate': 'Balanced approach between growth and stability',
+            'aggressive': 'Growth-focused with higher volatility tolerance'
+        }
+
+        suitability_map = {
+            'conservative': 'Investors prioritizing stability over growth',
+            'moderate': 'Long-term investors comfortable with market fluctuations',
+            'aggressive': 'Young investors with long investment horizons'
+        }
+
+        allocation_map = {
+            'conservative': 'Bonds, fixed deposits, and stable value funds',
+            'moderate': 'Mix of stocks, bonds, and alternative investments',
+            'aggressive': 'Growth stocks, emerging markets, and high-yield investments'
+        }
+
+        return {
+            'risk_level': risk_level_text,
+            'description': descriptions.get(risk_tolerance, descriptions['moderate']),
+            'suitability': suitability_map.get(risk_tolerance, suitability_map['moderate']),
+            'recommended_allocation': allocation_map.get(risk_tolerance, allocation_map['moderate']),
+            'time_factor': f"With {investment_horizon} years to invest, {'higher' if investment_horizon > 15 else 'moderate'} risk tolerance is appropriate",
+            'age_factor': f"At age {age}, you have {'ample' if age < 40 else 'sufficient' if age < 50 else 'limited'} time to recover from market downturns"
+        }
+    else:
+        # Parse LLM response for structured data
+        lines = raw_text.strip().split('\n')
+        structured_data = {
+            'description': raw_text.strip()
+        }
+
+        # Extract specific fields from LLM response
+        for line in lines:
+            line = line.strip()
+            if line.lower().startswith('risk level:'):
+                structured_data['risk_level'] = line.split(':', 1)[1].strip()
+            elif line.lower().startswith('description:'):
+                structured_data['description'] = line.split(':', 1)[1].strip()
+            elif line.lower().startswith('suitability:') or line.lower().startswith('suitable for:'):
+                structured_data['suitability'] = line.split(':', 1)[1].strip()
+            elif line.lower().startswith('allocation focus:') or line.lower().startswith('focus:'):
+                structured_data['recommended_allocation'] = line.split(':', 1)[1].strip()
+            elif line.lower().startswith('time factor:'):
+                structured_data['time_factor'] = line.split(':', 1)[1].strip()
+            elif line.lower().startswith('age factor:'):
+                structured_data['age_factor'] = line.split(':', 1)[1].strip()
+
+        # Ensure we have at least basic fields
+        if 'risk_level' not in structured_data:
+            structured_data['risk_level'] = f"{user_data.get('risk_tolerance', 'moderate').title()} Risk Profile"
+        if 'suitability' not in structured_data:
+            structured_data['suitability'] = f"Suitable for {user_data.get('risk_tolerance', 'moderate')} risk investors"
+
+        return structured_data
+
+def structure_time_horizon_analysis(raw_text, user_data, financial_metrics):
+    """Structure time horizon analysis into user-friendly format"""
+    if not raw_text or len(raw_text.strip()) < 10:
+        # Generate structured time horizon analysis
+        investment_horizon = financial_metrics.get('investment_horizon', 30)
+        age = user_data.get('age', 35)
+        retirement_age = user_data.get('retirement_age', 65)
+
+        if investment_horizon >= 25:
+            horizon_category = 'Long-term'
+            strategy = 'Growth-focused strategy with equity emphasis'
+            flexibility = 'High flexibility to weather market cycles'
+        elif investment_horizon >= 15:
+            horizon_category = 'Medium-term'
+            strategy = 'Balanced growth and income strategy'
+            flexibility = 'Moderate flexibility with some risk management'
+        else:
+            horizon_category = 'Short-term'
+            strategy = 'Conservative income-focused strategy'
+            flexibility = 'Limited flexibility, capital preservation priority'
+
+        return {
+            'horizon_category': f"{horizon_category} ({investment_horizon} years)",
+            'strategy': strategy,
+            'flexibility': flexibility,
+            'milestones': {
+                'short_term': f"Years 1-5: Build emergency fund and establish investment routine",
+                'medium_term': f"Years 6-15: Accumulate wealth and optimize portfolio allocation",
+                'long_term': f"Years 16-{investment_horizon}: Maximize growth and prepare for retirement"
+            },
+            'retirement_readiness': f"Target retirement at age {retirement_age} with {investment_horizon} years of wealth accumulation"
+        }
+    else:
+        # Parse existing LLM response into structured format
+        return {
+            'description': raw_text.strip(),
+            'horizon_category': f"{financial_metrics.get('investment_horizon', 30)}-year investment horizon",
+            'strategy': "Customized strategy based on your timeline and goals"
+        }
+
+def parse_goal_risks_mitigation(raw_text, user_data):
+    """Parse goal risks and mitigation strategies from LLM response"""
+    if not raw_text or len(raw_text.strip()) < 10:
+        # Generate default goal risks based on user profile
+        goals = user_data.get('goals', ['retirement'])
+        if isinstance(goals, str):
+            goals = [goals]
+
+        default_risks = {
+            'retirement': {
+                'risks': [
+                    'Market volatility affecting long-term returns',
+                    'Inflation eroding purchasing power over time',
+                    'Sequence of returns risk near retirement',
+                    'Healthcare cost increases in retirement'
+                ],
+                'mitigation': [
+                    'Diversified portfolio across asset classes',
+                    'Inflation-protected securities allocation',
+                    'Gradual shift to conservative investments near retirement',
+                    'Health savings account and insurance planning'
+                ]
+            },
+            'wealth_building': {
+                'risks': [
+                    'Market cycles affecting growth trajectory',
+                    'Lifestyle inflation reducing savings rate',
+                    'Economic downturns impacting income',
+                    'Lack of investment discipline'
+                ],
+                'mitigation': [
+                    'Dollar-cost averaging strategy',
+                    'Automatic savings and investment plans',
+                    'Emergency fund maintenance',
+                    'Regular portfolio reviews and rebalancing'
+                ]
+            },
+            'education': {
+                'risks': [
+                    'Education cost inflation exceeding general inflation',
+                    'Fixed timeline constraints',
+                    'Currency fluctuations for overseas education',
+                    'Changing education landscape and costs'
+                ],
+                'mitigation': [
+                    'Education-specific savings plans',
+                    'Conservative approach as deadline approaches',
+                    'Scholarship and grant research',
+                    'Alternative education funding options'
+                ]
+            }
+        }
+
+        result = {}
+        for goal in goals:
+            goal_key = goal.lower()
+            if goal_key in default_risks:
+                result[goal] = default_risks[goal_key]
+            else:
+                result[goal] = {
+                    'risks': [
+                        'Market uncertainty affecting goal timeline',
+                        'Inflation impact on goal costs',
+                        'Income volatility affecting savings',
+                        'Changing personal circumstances'
+                    ],
+                    'mitigation': [
+                        'Flexible investment strategy',
+                        'Regular goal review and adjustment',
+                        'Diversified savings approach',
+                        'Contingency planning'
+                    ]
+                }
+
+        return result
+    else:
+        # Parse LLM response for goal risks and mitigation
+        goals_data = {}
+
+        # Split by goal sections
+        goal_sections = raw_text.split('Goal Name:')
+
+        for section in goal_sections[1:]:  # Skip first empty section
+            lines = section.strip().split('\n')
+            if not lines:
+                continue
+
+            goal_name = lines[0].strip()
+            risks = []
+            mitigation = []
+
+            current_section = None
+            for line in lines[1:]:
+                line = line.strip()
+                if 'potential risks' in line.lower():
+                    current_section = 'risks'
+                elif 'mitigation' in line.lower():
+                    current_section = 'mitigation'
+                elif line.startswith('-') or line.startswith('•'):
+                    item = line.lstrip('-•').strip()
+                    if current_section == 'risks':
+                        risks.append(item)
+                    elif current_section == 'mitigation':
+                        mitigation.append(item)
+
+            if goal_name and (risks or mitigation):
+                goals_data[goal_name] = {
+                    'risks': risks if risks else ['Market uncertainty', 'Timeline constraints'],
+                    'mitigation': mitigation if mitigation else ['Regular monitoring', 'Flexible strategy']
+                }
+
+        return goals_data if goals_data else parse_goal_risks_mitigation("", user_data)
+
+def parse_additional_advice(raw_text, user_data):
+    """Parse additional advice from LLM response into bullet points"""
+    if not raw_text or len(raw_text.strip()) < 10:
+        # Generate default advice based on user profile
+        risk_tolerance = user_data.get('risk_tolerance', 'moderate').lower()
+        age = user_data.get('age', 35)
+        sharia_compliant = user_data.get('sharia_compliant', False)
+
+        default_advice = [
+            "Review and rebalance your portfolio quarterly to maintain target allocation",
+            "Increase monthly investments by 5-10% annually as income grows",
+            "Maintain an emergency fund covering 3-6 months of expenses",
+            "Consider tax-advantaged accounts for retirement savings",
+            "Monitor market conditions and adjust strategy during major economic shifts"
+        ]
+
+        if sharia_compliant:
+            default_advice.append("Ensure all investments maintain Sharia compliance through regular screening")
+
+        if age < 40:
+            default_advice.append("Take advantage of long investment horizon with growth-focused allocations")
+        elif age > 50:
+            default_advice.append("Begin gradual shift towards more conservative investments")
+
+        if risk_tolerance == 'conservative':
+            default_advice.append("Focus on capital preservation with stable, income-generating investments")
+        elif risk_tolerance == 'aggressive':
+            default_advice.append("Maximize growth potential while maintaining appropriate diversification")
+
+        return default_advice
+    else:
+        # Parse LLM response for bullet points
+        advice_list = []
+        lines = raw_text.strip().split('\n')
+
+        for line in lines:
+            line = line.strip()
+            if line.startswith('-') or line.startswith('•') or line.startswith('*'):
+                advice = line.lstrip('-•*').strip()
+                if advice and len(advice) > 10:  # Filter out very short items
+                    advice_list.append(advice)
+
+        # If no bullet points found, try to split by sentences
+        if not advice_list:
+            sentences = raw_text.replace('\n', ' ').split('.')
+            for sentence in sentences:
+                sentence = sentence.strip()
+                if sentence and len(sentence) > 20:
+                    advice_list.append(sentence)
+
+        return advice_list if advice_list else parse_additional_advice("", user_data)
 # TODO("DO not use investment DB instead use ollama3.2 / vector DB/ Gemini2.5 pro generated recommendations")
 def get_specific_instrument_recommendations(user_data):
     """Get specific instrument recommendations from the database"""
@@ -820,8 +1123,11 @@ def generate_dynamic_recommendations(user_data, financial_metrics):
         db = InvestmentDatabase()
         print(f"🔍 DEBUG - Database connection established")
 
+        # Normalize user data for consistency (handle both sharia_compliant and is_sharia_compliant)
+        is_sharia_compliant = user_data.get('is_sharia_compliant', user_data.get('sharia_compliant', False))
+
         # Get all available instruments
-        if user_data.get('is_sharia_compliant', False):
+        if is_sharia_compliant:
             instruments_df = db.get_sharia_compliant_instruments()
             print(f"🔍 DEBUG - Getting Sharia compliant instruments")
         else:
@@ -976,12 +1282,23 @@ def parse_llm_response_to_structured_data(llm_response, user_data, financial_met
                     portfolio_recommendations = portfolio_match.group(1)
                     print(f"🔍 DEBUG - Alternative pattern 3 found: {len(portfolio_recommendations)} chars")
 
-    risk_assessment = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?RISK ASSESSMENT(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?[A-Z]|\Z)', llm_response)
-    time_horizon = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?TIME HORIZON ANALYSIS(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?[A-Z]|\Z)', llm_response)
+    # Extract and structure risk assessment and time horizon analysis
+    risk_assessment_raw = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?RISK ASSESSMENT(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?[A-Z]|\Z)', llm_response)
+    time_horizon_raw = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?TIME HORIZON ANALYSIS(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?[A-Z]|\Z)', llm_response)
+
+    # Structure risk assessment for better UI display
+    risk_assessment = structure_risk_assessment(risk_assessment_raw, user_data, financial_metrics)
+    time_horizon = structure_time_horizon_analysis(time_horizon_raw, user_data, financial_metrics)
     monthly_savings = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?MONTHLY SAVINGS NEEDED(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?[A-Z]|\Z)', llm_response)
     # goal_timeline = extract_section(r'GOAL ACHIEVEMENT TIMELINE[:\s]*\n(.*?)(?=\n\d+\.|\n[A-Z]|\Z)', llm_response)  # Not used - we create structured timeline below
-    additional_advice = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?ADDITIONAL ADVICE(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?[A-Z]|\Z)', llm_response)
+    # Extract dynamic sections
+    goal_risks_raw = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?GOAL RISKS AND MITIGATION(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?[A-Z]|\Z)', llm_response)
+    additional_advice_raw = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?ADDITIONAL ADVICE(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?[A-Z]|\Z)', llm_response)
     compliance_notes = extract_section(r'(?:\d+\.\s*)?(?:\*\*)?COMPLIANCE NOTES(?:\*\*)?[:\s]*\n(.*?)(?=\n(?:\d+\.\s*)?(?:\*\*)?[A-Z]|\Z)', llm_response)
+
+    # Parse dynamic content
+    goal_risks_mitigation = parse_goal_risks_mitigation(goal_risks_raw, user_data)
+    additional_advice = parse_additional_advice(additional_advice_raw, user_data)
     
     # Parse portfolio recommendations into structured format with improved extraction
     recommendations = []
@@ -1164,21 +1481,8 @@ def parse_llm_response_to_structured_data(llm_response, user_data, financial_met
         else:
             total_allocation[category] = rec['allocation_percentage']
     
-    # Parse additional advice into list
-    advice_list = []
-    if additional_advice:
-        lines = additional_advice.split('\n')
-        for line in lines:
-            if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•')):
-                advice_list.append(line.strip('- •').strip())
-    
-    if not advice_list:
-        advice_list = [
-            "Start investing early to benefit from compound growth",
-            "Diversify your portfolio across different asset classes",
-            "Review and rebalance your portfolio annually",
-            "Consider tax-efficient investment vehicles"
-        ]
+    # additional_advice is already processed by parse_additional_advice() function
+    # and is ready to use as a list - no further processing needed
 
     # Calculate total projected wealth
     total_monthly_investment = sum(rec['investment_amount'] for rec in recommendations)
@@ -1189,6 +1493,13 @@ def parse_llm_response_to_structured_data(llm_response, user_data, financial_met
     # Create structured goal achievement timeline (React UI expects Record<string, number>)
     goal_achievement_timeline = {}
     user_goals = user_data.get('goals', ['retirement'])
+
+    # Ensure user_goals is always a list
+    if isinstance(user_goals, str):
+        user_goals = [user_goals]
+    elif not isinstance(user_goals, list):
+        user_goals = ['retirement']
+
     investment_horizon = financial_metrics['investment_horizon']
 
     for goal in user_goals:
@@ -1240,7 +1551,8 @@ def parse_llm_response_to_structured_data(llm_response, user_data, financial_met
         'total_projected_wealth': total_projected_wealth,
         'monthly_savings_needed': financial_metrics['additional_monthly_needed'],
         'goal_achievement_timeline': goal_achievement_timeline,
-        'additional_advice': advice_list,
+        'additional_advice': additional_advice,
+        'goal_risks_mitigation': goal_risks_mitigation,
         'compliance_notes': compliance_notes or ("Sharia-compliant investments recommended" if user_data['is_sharia_compliant'] else ""),
         'executive_summary': executive_summary or f"Based on your profile, with ${total_monthly_investment:,.0f} monthly investment, you are projected to accumulate approximately ${total_projected_wealth:,.0f} by age {user_data['retirement_age']}.",
         'financial_metrics': financial_metrics,
@@ -1260,7 +1572,18 @@ def generate_financial_plan():
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
         print(f"Received user data: {user_data}")
-        
+
+        # Normalize user data fields for consistency
+        if 'sharia_compliant' in user_data and 'is_sharia_compliant' not in user_data:
+            user_data['is_sharia_compliant'] = user_data['sharia_compliant']
+        elif 'is_sharia_compliant' not in user_data:
+            user_data['is_sharia_compliant'] = False
+
+        if 'market_type' in user_data and 'preferred_market' not in user_data:
+            user_data['preferred_market'] = user_data['market_type']
+        elif 'preferred_market' not in user_data:
+            user_data['preferred_market'] = 'UAE'
+
         # Calculate basic financial metrics
         financial_metrics = calculate_basic_financial_metrics(user_data)
 
