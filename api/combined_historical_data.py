@@ -32,13 +32,10 @@ for sym in us_symbols:
         print(f"Error fetching {sym}: {e}")
 
 # 2️⃣ UAE ETF 
-try:
 uae_df = pd.read_csv("UAE_stock_data.csv", parse_dates=['Date'])
 uae_df['Symbol'] = 'UAE_ISHARES'
 uae_df = uae_df.rename(columns={'Close':'Adj Close'})
 dfs.append(uae_df)
-except Exception as e:
-        print(f"Error fetching {sym}: {e}")
 
 # 3️⃣ DFM data (up to 2 years)
 for f in glob.glob("DFM_*.csv"):

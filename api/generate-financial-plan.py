@@ -14,7 +14,7 @@ sys.path.insert(0, str(project_root))
 try:
     from flask_api.standalone_app import generate_financial_plan_logic
     from flask_api.evaluator_agent import FinancialPlanEvaluator
-    from flask_api.investment_database import InvestmentDatabase
+    from investment_database import InvestmentDatabase
     import pandas as pd
     import numpy as np
 except ImportError as e:

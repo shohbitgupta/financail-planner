@@ -1397,94 +1397,496 @@ const FinancialPlannerDashboard: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-semibold text-gray-900 mb-3">Risk Assessment</h4>
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
+                    <div className="flex items-center mb-4">
+                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center mr-3">
+                        <span className="text-white text-sm font-bold">📊</span>
+                      </div>
+                      <h4 className="font-bold text-gray-900 text-lg">Risk Assessment</h4>
+                    </div>
+
                     {typeof plan.risk_assessment === 'string' ? (
-                      <p className="text-gray-700">{plan.risk_assessment}</p>
+                      // Parse **String:** patterns into bullet points
+                      (() => {
+                        const riskText = plan.risk_assessment;
+
+                        // Parse **String:** patterns and create bullet points
+                        const bulletPoints: string[] = [];
+
+                        // Split by **String:** pattern and process each section
+                        const sections = riskText.split(/\*\*([^*]+):\*\*/);
+
+                        for (let i = 1; i < sections.length; i += 2) {
+                          const label = sections[i].trim();
+                          const content = sections[i + 1] ? sections[i + 1].trim() : '';
+
+                          if (content) {
+                            // Clean up the content
+                            let cleanContent = content
+                              .replace(/^\s*\*\s*/, '') // Remove leading asterisk
+                              .replace(/\s*\*+\s*$/, '') // Remove trailing asterisks
+                              .replace(/\s*\*\*.*$/, '') // Remove trailing **String:** patterns
+                              .replace(/\.$/, '') // Remove trailing period
+                              .trim();
+
+                            // Split content at sentence boundaries if it's too long
+                            if (cleanContent.length > 150) {
+                              const sentences = cleanContent.split(/\.\s+/);
+                              sentences.forEach(sentence => {
+                                if (sentence.trim().length > 10) {
+                                  bulletPoints.push(`${label}: ${sentence.trim()}`);
+                                }
+                              });
+                            } else if (cleanContent.length > 10) {
+                              bulletPoints.push(`${label}: ${cleanContent}`);
+                            }
+                          }
+                        }
+
+                        // If no **String:** patterns found, try alternative parsing
+                        if (bulletPoints.length === 0) {
+                          // Look for patterns like "Risk Level: value" without markdown
+                          const patterns = [
+                            /Risk Level[:\s]*([^.\n]+)/i,
+                            /Description[:\s]*([^.\n]+)/i,
+                            /Suitability[:\s]*([^.\n]+)/i,
+                            /Mitigation[:\s]*([^.\n]+)/i,
+                            /Allocation[:\s]*([^.\n]+)/i,
+                            /Strategy[:\s]*([^.\n]+)/i
+                          ];
+
+                          patterns.forEach(pattern => {
+                            const match = riskText.match(pattern);
+                            if (match && match[1]) {
+                              const label = pattern.source.split('[')[0];
+                              const content = match[1].trim().replace(/[.*]/g, '');
+                              if (content.length > 10) {
+                                bulletPoints.push(`${label}: ${content}`);
+                              }
+                            }
+                          });
+                        }
+
+                        // If still no points, create from sentences
+                        if (bulletPoints.length === 0) {
+                          const sentences = riskText.split(/[.!?]+/).filter(s => s.trim().length > 20);
+                          sentences.slice(0, 4).forEach((sentence, index) => {
+                            const cleaned = sentence.trim().replace(/[*#]/g, '');
+                            if (cleaned.length > 10) {
+                              bulletPoints.push(`Point ${index + 1}: ${cleaned}`);
+                            }
+                          });
+                        }
+
+                        return (
+                          <div className="space-y-4">
+                            {/* Simple Bullet Points Display */}
+                            <div className="bg-white rounded-lg p-4 border border-blue-100">
+                              <div className="flex items-start space-x-3">
+                                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <span className="text-blue-600 text-xs">📊</span>
+                                </div>
+                                <div className="flex-1">
+                                  <h5 className="font-semibold text-gray-900 mb-2">Risk Assessment Details</h5>
+                                  {bulletPoints.length > 0 ? (
+                                    <ul className="space-y-2">
+                                      {bulletPoints.map((point: string, index: number) => (
+                                        <li key={index} className="text-gray-700 text-sm flex items-start">
+                                          <span className="text-blue-500 mr-2 flex-shrink-0 mt-1">•</span>
+                                          <span className="leading-relaxed">{point}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <p className="text-gray-700 text-sm">{riskText}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()
                     ) : (
-                      <div className="space-y-3">
-                        {plan.risk_assessment.risk_level && (
-                          <div>
-                            <span className="font-medium text-gray-900">Risk Level: </span>
-                            <span className="text-gray-700">{plan.risk_assessment.risk_level}</span>
+                      // Structured object format
+                      <div className="space-y-4">
+                        {/* Risk Level Badge */}
+                        <div className="flex items-center space-x-3">
+                          <div className="bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-semibold">
+                            {plan.risk_assessment.risk_level || 'Moderate Risk'}
                           </div>
-                        )}
-                        <div>
-                          <span className="font-medium text-gray-900">Description: </span>
-                          <span className="text-gray-700">{plan.risk_assessment.description}</span>
+                          <div className="flex-1 h-2 bg-gray-200 rounded-full">
+                            <div className="h-2 bg-gradient-to-r from-green-400 to-blue-500 rounded-full" style={{width: '60%'}}></div>
+                          </div>
                         </div>
-                        {plan.risk_assessment.suitability && (
-                          <div>
-                            <span className="font-medium text-gray-900">Suitable For: </span>
-                            <span className="text-gray-700">{plan.risk_assessment.suitability}</span>
+
+                        {/* Information Cards */}
+                        <div className="grid grid-cols-1 gap-3">
+                          <div className="bg-white rounded-lg p-4 border border-blue-100">
+                            <div className="flex items-start space-x-3">
+                              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <span className="text-blue-600 text-xs">ℹ️</span>
+                              </div>
+                              <div>
+                                <h5 className="font-semibold text-gray-900 mb-1">Description</h5>
+                                <p className="text-gray-700 text-sm">{plan.risk_assessment.description}</p>
+                              </div>
+                            </div>
                           </div>
-                        )}
-                        {plan.risk_assessment.recommended_allocation && (
-                          <div>
-                            <span className="font-medium text-gray-900">Focus: </span>
-                            <span className="text-gray-700">{plan.risk_assessment.recommended_allocation}</span>
-                          </div>
-                        )}
-                        {plan.risk_assessment.time_factor && (
-                          <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded">
-                            {plan.risk_assessment.time_factor}
-                          </div>
-                        )}
+
+                          {plan.risk_assessment.suitability && (
+                            <div className="bg-white rounded-lg p-4 border border-green-100">
+                              <div className="flex items-start space-x-3">
+                                <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <span className="text-green-600 text-xs">✓</span>
+                                </div>
+                                <div>
+                                  <h5 className="font-semibold text-gray-900 mb-1">Suitable For</h5>
+                                  <p className="text-gray-700 text-sm">{plan.risk_assessment.suitability}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {plan.risk_assessment.recommended_allocation && (
+                            <div className="bg-white rounded-lg p-4 border border-purple-100">
+                              <div className="flex items-start space-x-3">
+                                <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <span className="text-purple-600 text-xs">🎯</span>
+                                </div>
+                                <div>
+                                  <h5 className="font-semibold text-gray-900 mb-1">Allocation Focus</h5>
+                                  <p className="text-gray-700 text-sm">{plan.risk_assessment.recommended_allocation}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {plan.risk_assessment.time_factor && (
+                            <div className="bg-white rounded-lg p-4 border border-indigo-100">
+                              <div className="flex items-start space-x-3">
+                                <div className="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <span className="text-indigo-600 text-xs">⏰</span>
+                                </div>
+                                <div>
+                                  <h5 className="font-semibold text-gray-900 mb-1">Time Considerations</h5>
+                                  <p className="text-gray-700 text-sm">{plan.risk_assessment.time_factor}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
 
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-semibold text-gray-900 mb-3">Time Horizon Analysis</h4>
+                  <div className="bg-gradient-to-br from-green-50 to-teal-50 rounded-lg p-6 border border-green-200">
+                    <div className="flex items-center mb-4">
+                      <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mr-3">
+                        <span className="text-white text-sm font-bold">⏰</span>
+                      </div>
+                      <h4 className="font-bold text-gray-900 text-lg">Time Horizon Analysis</h4>
+                    </div>
+
                     {typeof plan.time_horizon_analysis === 'string' ? (
-                      <p className="text-gray-700">{plan.time_horizon_analysis}</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {plan.time_horizon_analysis.horizon_category && (
-                          <div>
-                            <span className="font-medium text-gray-900">Timeline: </span>
-                            <span className="text-gray-700">{plan.time_horizon_analysis.horizon_category}</span>
-                          </div>
-                        )}
-                        {plan.time_horizon_analysis.strategy && (
-                          <div>
-                            <span className="font-medium text-gray-900">Strategy: </span>
-                            <span className="text-gray-700">{plan.time_horizon_analysis.strategy}</span>
-                          </div>
-                        )}
-                        {plan.time_horizon_analysis.flexibility && (
-                          <div>
-                            <span className="font-medium text-gray-900">Flexibility: </span>
-                            <span className="text-gray-700">{plan.time_horizon_analysis.flexibility}</span>
-                          </div>
-                        )}
-                        {plan.time_horizon_analysis.milestones && (
-                          <div className="mt-3">
-                            <span className="font-medium text-gray-900 block mb-2">Investment Milestones:</span>
-                            <div className="space-y-1 text-sm">
-                              {plan.time_horizon_analysis.milestones.short_term && (
-                                <div className="text-green-700 bg-green-50 p-2 rounded">
-                                  {plan.time_horizon_analysis.milestones.short_term}
+                      // Parse string format into structured display
+                      (() => {
+                        const timeText = plan.time_horizon_analysis;
+
+                        // Clean up markdown formatting
+                        const cleanTimeText = timeText
+                          .replace(/\*\*/g, '') // Remove bold markdown
+                          .replace(/\*/g, '') // Remove asterisks
+                          .replace(/#{1,6}\s/g, '') // Remove headers
+                          .trim();
+
+                        // Extract timeline with better pattern matching
+                        const timelineMatch = cleanTimeText.match(/(?:Timeline|Horizon)[:\s]*([^.*\n]+?)(?:\.|$)/i);
+                        const timeline = timelineMatch ? timelineMatch[1].trim().replace(/[.*]/g, '') : 'Long-term (30 years)';
+
+                        // Extract strategy with better pattern matching
+                        const strategyMatch = cleanTimeText.match(/Strategy[:\s]*([^.*\n]+?)(?:\.|Short-Term|Medium-Term|Long-Term|$)/i);
+                        let strategy = strategyMatch ? strategyMatch[1].trim().replace(/[.*]/g, '') : '';
+
+                        // If no strategy found, extract from the beginning
+                        if (!strategy) {
+                          const firstSentence = cleanTimeText.split(/[.!?]+/)[0];
+                          strategy = firstSentence.length > 20 ? firstSentence : 'Long-term investment approach with periodic rebalancing';
+                        }
+
+                        // Extract phase-specific information
+                        const shortTermMatch = cleanTimeText.match(/Short-Term[^:]*:[^*]*?([^.*\n]+?)(?:\.|Medium-Term|$)/i);
+                        const shortTerm = shortTermMatch ? shortTermMatch[1].trim().replace(/[.*]/g, '') : '';
+
+                        const mediumTermMatch = cleanTimeText.match(/Medium-Term[^:]*:[^*]*?([^.*\n]+?)(?:\.|Long-Term|$)/i);
+                        const mediumTerm = mediumTermMatch ? mediumTermMatch[1].trim().replace(/[.*]/g, '') : '';
+
+                        const longTermMatch = cleanTimeText.match(/Long-Term[^:]*:[^*]*?([^.*\n]+?)(?:\.|MONTHLY|$)/i);
+                        const longTerm = longTermMatch ? longTermMatch[1].trim().replace(/[.*]/g, '') : '';
+
+                        // Extract bullet points and key information
+                        const timeKeyPoints: string[] = [];
+
+                        // Look for explicit bullet points
+                        const bulletMatches = cleanTimeText.match(/(?:^|\n)\s*[-•*]\s*([^.\n]+)/gm);
+                        if (bulletMatches) {
+                          bulletMatches.forEach(match => {
+                            const point = match.replace(/^[\n\s]*[-•*]\s*/, '').trim();
+                            if (point.length > 10) {
+                              timeKeyPoints.push(point);
+                            }
+                          });
+                        }
+
+                        // If no bullet points found, extract key sentences
+                        if (timeKeyPoints.length === 0) {
+                          const sentences = cleanTimeText.split(/[.!?]+/).filter(s => {
+                            const trimmed = s.trim();
+                            return trimmed.length > 15 &&
+                                   !trimmed.toLowerCase().includes('timeline') &&
+                                   !trimmed.toLowerCase().includes('strategy');
+                          });
+
+                          sentences.slice(0, 3).forEach(sentence => {
+                            const cleaned = sentence.trim().replace(/[.*]/g, '');
+                            if (cleaned.length > 10) {
+                              timeKeyPoints.push(cleaned);
+                            }
+                          });
+                        }
+
+                        return (
+                          <div className="space-y-4">
+                            {/* Timeline Badge */}
+                            <div className="flex items-center space-x-3">
+                              <div className="bg-green-500 text-white px-4 py-2 rounded-full text-sm font-semibold">
+                                {timeline}
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                                  <span>Start</span>
+                                  <span>Mid-term</span>
+                                  <span>Retirement</span>
+                                </div>
+                                <div className="h-2 bg-gray-200 rounded-full">
+                                  <div className="h-2 bg-gradient-to-r from-green-400 via-yellow-400 to-blue-500 rounded-full" style={{width: '100%'}}></div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Strategy and Key Points */}
+                            <div className="grid grid-cols-1 gap-3">
+                              <div className="bg-white rounded-lg p-4 border border-green-100">
+                                <div className="flex items-start space-x-3">
+                                  <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                    <span className="text-green-600 text-xs">📈</span>
+                                  </div>
+                                  <div>
+                                    <h5 className="font-semibold text-gray-900 mb-1">Investment Strategy</h5>
+                                    <p className="text-gray-700 text-sm">{strategy}</p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Timeline Phases */}
+                              <div className="bg-white rounded-lg p-4 border border-teal-100">
+                                <div className="flex items-start space-x-3">
+                                  <div className="w-6 h-6 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                    <span className="text-teal-600 text-xs">🎯</span>
+                                  </div>
+                                  <div className="flex-1">
+                                    <h5 className="font-semibold text-gray-900 mb-2">Investment Phases</h5>
+                                    <div className="space-y-2">
+                                      <div className="flex items-center space-x-3">
+                                        <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+                                        <span className="text-sm text-gray-700">Years 1-10: Growth Phase</span>
+                                      </div>
+                                      <div className="flex items-center space-x-3">
+                                        <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
+                                        <span className="text-sm text-gray-700">Years 11-20: Consolidation Phase</span>
+                                      </div>
+                                      <div className="flex items-center space-x-3">
+                                        <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
+                                        <span className="text-sm text-gray-700">Years 21-30: Pre-retirement Phase</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Key Considerations */}
+                              {timeKeyPoints.length > 0 && (
+                                <div className="bg-white rounded-lg p-4 border border-blue-100">
+                                  <div className="flex items-start space-x-3">
+                                    <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                      <span className="text-blue-600 text-xs">💡</span>
+                                    </div>
+                                    <div className="flex-1">
+                                      <h5 className="font-semibold text-gray-900 mb-2">Key Considerations</h5>
+                                      <ul className="space-y-1">
+                                        {timeKeyPoints.map((point: string, index: number) => (
+                                          <li key={index} className="text-gray-700 text-sm flex items-start">
+                                            <span className="text-blue-500 mr-2 flex-shrink-0">•</span>
+                                            <span>{point}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  </div>
                                 </div>
                               )}
-                              {plan.time_horizon_analysis.milestones.medium_term && (
-                                <div className="text-yellow-700 bg-yellow-50 p-2 rounded">
-                                  {plan.time_horizon_analysis.milestones.medium_term}
-                                </div>
-                              )}
-                              {plan.time_horizon_analysis.milestones.long_term && (
-                                <div className="text-blue-700 bg-blue-50 p-2 rounded">
-                                  {plan.time_horizon_analysis.milestones.long_term}
+
+                              {/* Phase-specific Information */}
+                              {(shortTerm || mediumTerm || longTerm) && (
+                                <div className="bg-white rounded-lg p-4 border border-teal-100">
+                                  <div className="flex items-start space-x-3">
+                                    <div className="w-6 h-6 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                      <span className="text-teal-600 text-xs">📅</span>
+                                    </div>
+                                    <div className="flex-1">
+                                      <h5 className="font-semibold text-gray-900 mb-2">Phase-Specific Strategy</h5>
+                                      <div className="space-y-2">
+                                        {shortTerm && (
+                                          <div className="flex items-start space-x-3">
+                                            <div className="w-3 h-3 bg-green-400 rounded-full mt-1.5 flex-shrink-0"></div>
+                                            <div>
+                                              <div className="text-sm font-medium text-gray-900">Short-term Focus</div>
+                                              <div className="text-sm text-gray-700">{shortTerm}</div>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {mediumTerm && (
+                                          <div className="flex items-start space-x-3">
+                                            <div className="w-3 h-3 bg-yellow-400 rounded-full mt-1.5 flex-shrink-0"></div>
+                                            <div>
+                                              <div className="text-sm font-medium text-gray-900">Medium-term Focus</div>
+                                              <div className="text-sm text-gray-700">{mediumTerm}</div>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {longTerm && (
+                                          <div className="flex items-start space-x-3">
+                                            <div className="w-3 h-3 bg-blue-400 rounded-full mt-1.5 flex-shrink-0"></div>
+                                            <div>
+                                              <div className="text-sm font-medium text-gray-900">Long-term Focus</div>
+                                              <div className="text-sm text-gray-700">{longTerm}</div>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
                               )}
                             </div>
                           </div>
-                        )}
-                        {plan.time_horizon_analysis.retirement_readiness && (
-                          <div className="text-sm text-purple-600 bg-purple-50 p-2 rounded">
-                            {plan.time_horizon_analysis.retirement_readiness}
+                        );
+                      })()
+                    ) : (
+                      // Structured object format
+                      <div className="space-y-4">
+                        {/* Timeline Badge */}
+                        <div className="flex items-center space-x-3">
+                          <div className="bg-green-500 text-white px-4 py-2 rounded-full text-sm font-semibold">
+                            {plan.time_horizon_analysis.horizon_category || 'Long-term'}
                           </div>
-                        )}
+                          <div className="flex-1">
+                            <div className="flex justify-between text-xs text-gray-500 mb-1">
+                              <span>Start</span>
+                              <span>Mid-term</span>
+                              <span>Retirement</span>
+                            </div>
+                            <div className="h-2 bg-gray-200 rounded-full">
+                              <div className="h-2 bg-gradient-to-r from-green-400 via-yellow-400 to-blue-500 rounded-full" style={{width: '100%'}}></div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Information Cards */}
+                        <div className="grid grid-cols-1 gap-3">
+                          {plan.time_horizon_analysis.strategy && (
+                            <div className="bg-white rounded-lg p-4 border border-green-100">
+                              <div className="flex items-start space-x-3">
+                                <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <span className="text-green-600 text-xs">📈</span>
+                                </div>
+                                <div>
+                                  <h5 className="font-semibold text-gray-900 mb-1">Investment Strategy</h5>
+                                  <p className="text-gray-700 text-sm">{plan.time_horizon_analysis.strategy}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {plan.time_horizon_analysis.flexibility && (
+                            <div className="bg-white rounded-lg p-4 border border-yellow-100">
+                              <div className="flex items-start space-x-3">
+                                <div className="w-6 h-6 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <span className="text-yellow-600 text-xs">🔄</span>
+                                </div>
+                                <div>
+                                  <h5 className="font-semibold text-gray-900 mb-1">Flexibility</h5>
+                                  <p className="text-gray-700 text-sm">{plan.time_horizon_analysis.flexibility}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {plan.time_horizon_analysis.milestones && (
+                            <div className="bg-white rounded-lg p-4 border border-teal-100">
+                              <div className="flex items-start space-x-3">
+                                <div className="w-6 h-6 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <span className="text-teal-600 text-xs">🎯</span>
+                                </div>
+                                <div className="flex-1">
+                                  <h5 className="font-semibold text-gray-900 mb-2">Investment Milestones</h5>
+                                  <div className="space-y-2">
+                                    {plan.time_horizon_analysis.milestones.short_term && (
+                                      <div className="flex items-start space-x-3">
+                                        <div className="w-3 h-3 bg-green-400 rounded-full mt-1.5 flex-shrink-0"></div>
+                                        <div>
+                                          <div className="text-sm font-medium text-gray-900">Short-term (1-5 years)</div>
+                                          <div className="text-sm text-gray-700">{plan.time_horizon_analysis.milestones.short_term}</div>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {plan.time_horizon_analysis.milestones.medium_term && (
+                                      <div className="flex items-start space-x-3">
+                                        <div className="w-3 h-3 bg-yellow-400 rounded-full mt-1.5 flex-shrink-0"></div>
+                                        <div>
+                                          <div className="text-sm font-medium text-gray-900">Medium-term (6-15 years)</div>
+                                          <div className="text-sm text-gray-700">{plan.time_horizon_analysis.milestones.medium_term}</div>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {plan.time_horizon_analysis.milestones.long_term && (
+                                      <div className="flex items-start space-x-3">
+                                        <div className="w-3 h-3 bg-blue-400 rounded-full mt-1.5 flex-shrink-0"></div>
+                                        <div>
+                                          <div className="text-sm font-medium text-gray-900">Long-term (16+ years)</div>
+                                          <div className="text-sm text-gray-700">{plan.time_horizon_analysis.milestones.long_term}</div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {plan.time_horizon_analysis.retirement_readiness && (
+                            <div className="bg-white rounded-lg p-4 border border-purple-100">
+                              <div className="flex items-start space-x-3">
+                                <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <span className="text-purple-600 text-xs">🏖️</span>
+                                </div>
+                                <div>
+                                  <h5 className="font-semibold text-gray-900 mb-1">Retirement Readiness</h5>
+                                  <p className="text-gray-700 text-sm">{plan.time_horizon_analysis.retirement_readiness}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1507,9 +1909,13 @@ const FinancialPlannerDashboard: React.FC = () => {
                   <h3 className="text-lg font-semibold mb-4">Investment Goals Timeline & Risk Analysis</h3>
                   <div className="space-y-4">
                     {Object.entries(plan.goal_achievement_timeline).map(([goal, years]) => {
-                      // Goal categorization logic
+                      // Goal categorization logic with dynamic risk data
                       const getGoalInfo = (goalName: string, timelineYears: number) => {
                         const name = goalName.toLowerCase();
+
+                        // Get dynamic risks and mitigation from API response
+                        const dynamicData = plan.goal_risks_mitigation?.[goalName] || plan.goal_risks_mitigation?.[goal];
+
                         if (name.includes('retirement')) {
                           return {
                             category: 'Long-term',
@@ -1519,8 +1925,8 @@ const FinancialPlannerDashboard: React.FC = () => {
                             textColor: 'text-blue-600',
                             priority: 'High',
                             description: 'Primary retirement planning goal',
-                            risks: ['Market volatility over long term', 'Inflation impact', 'Sequence of returns risk'],
-                            workarounds: ['Diversified portfolio', 'Regular rebalancing', 'Inflation-protected securities', 'Gradual shift to conservative allocation']
+                            risks: dynamicData?.risks || ['Market volatility over long term', 'Inflation impact', 'Sequence of returns risk'],
+                            workarounds: dynamicData?.mitigation || ['Diversified portfolio', 'Regular rebalancing', 'Inflation-protected securities']
                           };
                         } else if (name.includes('house') || name.includes('property')) {
                           return {
@@ -1531,8 +1937,8 @@ const FinancialPlannerDashboard: React.FC = () => {
                             textColor: 'text-green-600',
                             priority: 'High',
                             description: 'Real estate acquisition goal',
-                            risks: ['Property market fluctuations', 'Interest rate changes', 'Down payment timing'],
-                            workarounds: ['Conservative allocation closer to target', 'Fixed income instruments', 'Market timing flexibility', 'Pre-approval preparation']
+                            risks: dynamicData?.risks || ['Property market fluctuations', 'Interest rate changes', 'Down payment timing'],
+                            workarounds: dynamicData?.mitigation || ['Conservative allocation closer to target', 'Fixed income instruments', 'Market timing flexibility']
                           };
                         } else if (name.includes('education')) {
                           return {
@@ -1543,8 +1949,8 @@ const FinancialPlannerDashboard: React.FC = () => {
                             textColor: 'text-purple-600',
                             priority: 'High',
                             description: 'Education funding goal',
-                            risks: ['Education cost inflation', 'Fixed timeline', 'Currency fluctuations for overseas education'],
-                            workarounds: ['Education-specific savings plans', 'Conservative approach near deadline', 'Scholarship opportunities']
+                            risks: dynamicData?.risks || ['Education cost inflation', 'Fixed timeline', 'Currency fluctuations'],
+                            workarounds: dynamicData?.mitigation || ['Education-specific savings plans', 'Conservative approach near deadline', 'Scholarship opportunities']
                           };
                         } else if (name.includes('travel')) {
                           return {
@@ -1555,8 +1961,8 @@ const FinancialPlannerDashboard: React.FC = () => {
                             textColor: 'text-orange-600',
                             priority: 'Medium',
                             description: 'Travel and leisure goal',
-                            risks: ['Currency fluctuations', 'Economic disruptions', 'Travel restrictions'],
-                            workarounds: ['Liquid savings', 'Flexible timing', 'Currency hedging', 'Travel insurance']
+                            risks: dynamicData?.risks || ['Currency fluctuations', 'Economic disruptions', 'Travel restrictions'],
+                            workarounds: dynamicData?.mitigation || ['Liquid savings', 'Flexible timing', 'Currency hedging']
                           };
                         } else if (name.includes('wealth') || name.includes('building')) {
                           return {
@@ -1567,8 +1973,8 @@ const FinancialPlannerDashboard: React.FC = () => {
                             textColor: 'text-indigo-600',
                             priority: 'Medium',
                             description: 'Wealth accumulation goal',
-                            risks: ['Market cycles', 'Sequence of returns risk', 'Lifestyle inflation'],
-                            workarounds: ['Dollar-cost averaging', 'Diversification', 'Long-term perspective', 'Regular reviews']
+                            risks: dynamicData?.risks || ['Market cycles', 'Sequence of returns risk', 'Lifestyle inflation'],
+                            workarounds: dynamicData?.mitigation || ['Dollar-cost averaging', 'Diversification', 'Long-term perspective']
                           };
                         } else if (name.includes('emergency')) {
                           return {
@@ -1579,8 +1985,8 @@ const FinancialPlannerDashboard: React.FC = () => {
                             textColor: 'text-red-600',
                             priority: 'Critical',
                             description: 'Emergency fund safety net',
-                            risks: ['Inflation erosion', 'Opportunity cost', 'Insufficient coverage'],
-                            workarounds: ['High-yield savings', 'Money market funds', 'Laddered CDs', '3-6 months expenses coverage']
+                            risks: dynamicData?.risks || ['Inflation erosion', 'Opportunity cost', 'Insufficient coverage'],
+                            workarounds: dynamicData?.mitigation || ['High-yield savings', 'Money market funds', 'Laddered CDs']
                           };
                         } else {
                           return {
@@ -1591,8 +1997,8 @@ const FinancialPlannerDashboard: React.FC = () => {
                             textColor: 'text-gray-600',
                             priority: 'Medium',
                             description: 'General financial goal',
-                            risks: ['Market uncertainty', 'Timeline constraints', 'Goal clarity'],
-                            workarounds: ['Balanced approach', 'Regular monitoring', 'Flexible strategy', 'Goal refinement']
+                            risks: dynamicData?.risks || ['Market uncertainty', 'Timeline constraints', 'Goal clarity'],
+                            workarounds: dynamicData?.mitigation || ['Balanced approach', 'Regular monitoring', 'Flexible strategy']
                           };
                         }
                       };

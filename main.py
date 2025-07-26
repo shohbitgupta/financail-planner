@@ -17,7 +17,8 @@ CONTEXT:
 - Relevant financial instruments: {instruments}
 - Portfolio optimization results: {portfolio_analysis}
 - Financial planning calculations: {financial_projections}
-- User profile: Age {age}, 
+- User profile: 
+  Age {age}, 
   Retirement Age {retirement_age}, 
   Annual Income ${annual_income}, 
   Annual Expenses ${annual_expenses}, 
